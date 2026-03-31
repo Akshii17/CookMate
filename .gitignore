@@ -1,0 +1,28 @@
+# Virtual environment
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment variables (IMPORTANT)
+.env
+
+# VS Code settings (optional but recommended)
+.vscode/
+
+# Database / vector DB (VERY IMPORTANT for RAG)
+db_chroma_db/
+*.sqlite3
+
+# Model / embeddings (future-proof)
+*.bin
+*.pt
+*.pkl
+*.faiss
+*.index
+
+# OS junk
+.DS_Store
+Thumbs.db
