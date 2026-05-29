@@ -1,0 +1,313 @@
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,600&family=Inter:wght@300;400;500&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Playfair Display", ui-serif, Georgia, serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --color-cm-bg: #e6e2d4;
+  --color-cm-sidebar: #dad6c4;
+  --color-cm-card: #edead9;
+  --color-cm-card-border: #cfc8b0;
+  --color-cm-olive: #728e50;
+  --color-cm-olive-dark: #788f58;
+  --color-cm-olive-muted: #587038;
+  --color-cm-text: #252e10;
+  --color-cm-text-muted: #6e6858;
+  --color-cm-chip: #b5c298;
+  --color-cm-input-bg: #f0ece0;
+  --color-cm-danger: #c05038;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes float-leaf {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(2.5deg);
+  }
+}
+
+@keyframes arrow-slide {
+  0% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(5px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes art-wiggle {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+  30% {
+    transform: scale(1.07) rotate(-4deg);
+  }
+  70% {
+    transform: scale(1.07) rotate(3deg);
+  }
+}
+
+@keyframes mic-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+@keyframes mic-throb {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.07);
+  }
+}
+
+@keyframes bar-bounce {
+  0%,
+  100% {
+    transform: scaleY(0.25);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes arrow-pop {
+  0% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(5px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes save-pop {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(0.94);
+  }
+  70% {
+    transform: scale(1.04);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes check-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6) rotate(-10deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes avatar-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(114, 142, 80, 0.28);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(114, 142, 80, 0);
+  }
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes heart-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.38);
+  }
+  70% {
+    transform: scale(0.88);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@layer utilities {
+  .animate-fade-up {
+    animation: fade-up 0.52s ease both;
+  }
+  .animate-fade-in {
+    animation: fade-in 0.4s ease both;
+  }
+  .animate-card-in {
+    animation: card-in 0.48s ease both;
+  }
+  .animate-float-leaf {
+    animation: float-leaf 4.5s ease-in-out infinite;
+  }
+  .animate-save-pop {
+    animation: save-pop 0.32s ease;
+  }
+  .animate-check-in {
+    animation: check-in 0.28s ease both;
+  }
+  .animate-slide-in {
+    animation: slide-in 0.3s ease both;
+  }
+  .animate-heart-pop {
+    animation: heart-pop 0.38s ease;
+  }
+  .animate-avatar-pulse {
+    animation: avatar-pulse 3s ease-in-out infinite;
+  }
+
+  .group:hover .group-hover\:animate-art-wiggle {
+    animation: art-wiggle 0.42s ease;
+  }
+  .group:hover .group-hover\:animate-arrow-slide {
+    animation: arrow-slide 0.35s ease;
+  }
+  .group:hover .group-hover\:animate-arrow-pop {
+    animation: arrow-pop 0.35s ease;
+  }
+
+  .page-shell {
+    @apply mx-auto w-full max-w-2xl space-y-6 px-5 pt-14 pb-12 md:max-w-none md:px-8 md:pb-10 lg:px-10 lg:pb-12;
+  }
+
+  .page-shell-wide {
+    @apply mx-auto w-full max-w-6xl;
+  }
+
+  .page-hero {
+    @apply space-y-4 border-b border-[#d2cebe] pb-6 text-center;
+  }
+
+  .page-hero-chips {
+    @apply flex flex-wrap justify-center gap-2;
+  }
+
+  .page-title {
+    @apply text-center font-display text-[1.75rem] leading-tight font-bold tracking-tight text-cm-text sm:text-4xl;
+  }
+
+  .page-desc {
+    @apply mx-auto max-w-md font-sans text-[15px] leading-relaxed font-light text-cm-text-muted sm:text-base;
+  }
+
+  .page-section {
+    @apply space-y-4;
+  }
+
+  .page-section-grid {
+    @apply space-y-4 lg:grid lg:grid-cols-3 lg:gap-6 lg:space-y-0;
+  }
+
+  .page-cards-grid {
+    @apply space-y-4 lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0;
+  }
+
+  .page-card {
+    @apply rounded-[20px] border-[1.5px] border-cm-card-border bg-cm-card p-5 sm:p-6;
+  }
+}
+
+.mic-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid #7a9a58;
+  animation: mic-ring 2s ease-out infinite;
+  pointer-events: none;
+}
+.mic-ring:nth-child(2) {
+  animation-delay: 0.65s;
+}
+.mic-ring:nth-child(3) {
+  animation-delay: 1.3s;
+}
+
+.wave-bar {
+  width: 3px;
+  height: 28px;
+  background: #f0ede0;
+  border-radius: 4px;
+  transform-origin: center bottom;
+  transform: scaleY(0.25);
+}
+.wave-bar.go {
+  animation: bar-bounce 0.55s ease-in-out infinite;
+}
+.wave-bar:nth-child(1) {
+  animation-delay: 0s;
+}
+.wave-bar:nth-child(2) {
+  animation-delay: 0.1s;
+}
+.wave-bar:nth-child(3) {
+  animation-delay: 0.2s;
+}
+.wave-bar:nth-child(4) {
+  animation-delay: 0.1s;
+}
+.wave-bar:nth-child(5) {
+  animation-delay: 0s;
+}
