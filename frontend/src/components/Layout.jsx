@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import { Home, Heart, User, LogOut, Menu, Leaf, ChevronLeft } from "lucide-react";
 
 const navItems = [
-  { label: "Home", to: "/", icon: Home },
+  { label: "Home", to: "/home", icon: Home },
   { label: "Favorites", to: "/favourites", icon: Heart },
   { label: "Profile", to: "/profile", icon: User },
 ];
@@ -12,7 +13,7 @@ function NavButton({ to, icon: Icon, label, collapsed }) {
   return (
     <NavLink
       to={to}
-      end={to === "/"}
+      end={to === "/home"}
       className={({ isActive }) =>
         `mb-0.5 flex w-full items-center border-none bg-transparent py-2.5 font-sans text-[13px] transition-colors ${
           collapsed ? "justify-center px-2" : "gap-2.5 px-3.5 text-left"
@@ -35,8 +36,14 @@ function NavButton({ to, icon: Icon, label, collapsed }) {
 
 export default function Layout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const navigate = useNavigate();
 
   const toggleSidebar = () => setSidebarCollapsed((prev) => !prev);
+
+  const handleLogout = () => {
+    navigate("/");
+    toast.success("Logged out successfully");
+  };
 
   return (
     <div className="flex min-h-screen bg-cm-bg font-sans">
@@ -101,6 +108,8 @@ export default function Layout() {
 
           <button
             type="button"
+            onClick={handleLogout}
+            aria-label="Log out"
             className={`flex w-full items-center border-none bg-transparent py-2 font-sans text-[13px] text-[#6a6454] transition-colors hover:text-[#2a3218] ${
               sidebarCollapsed ? "justify-center px-0" : "gap-2.5 px-1 text-left"
             }`}

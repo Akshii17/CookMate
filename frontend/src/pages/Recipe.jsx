@@ -126,10 +126,10 @@ function RecipeStepView({ recipe, query, onBack, initialFavorited = false }) {
 
   return (
     <div className="animate-slide-in flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="shrink-0 space-y-3 pb-3">
+      <div className="shrink-0 space-y-2 pb-2">
         <div className="relative">
           <PageHero
-            className="!space-y-2 !pb-3"
+            className="!space-y-1 !border-b-0 !pb-0"
             title={displayName}
             description={
               <>
@@ -159,8 +159,8 @@ function RecipeStepView({ recipe, query, onBack, initialFavorited = false }) {
           </button>
         </div>
 
-        <div className="page-card px-4 py-2.5 sm:px-5">
-          <h3 className="mb-1.5 font-sans text-[10px] font-medium tracking-wide text-[#9a9078] uppercase">
+        <div className="page-card !p-3 sm:!p-4">
+          <h3 className="mb-1 font-sans text-[10px] font-medium tracking-wide text-[#9a9078] uppercase">
             Ingredients
           </h3>
           <ul className="flex flex-wrap gap-x-3 gap-y-1.5">
@@ -177,8 +177,8 @@ function RecipeStepView({ recipe, query, onBack, initialFavorited = false }) {
         </div>
       </div>
 
-      <div className="page-card flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3 sm:px-5">
-        <h3 className="mb-2 shrink-0 font-sans text-[10.5px] font-medium tracking-wide text-[#9a9078] uppercase">
+      <div className="page-card mt-2 flex min-h-0 flex-1 flex-col overflow-hidden !p-3 sm:!p-4">
+        <h3 className="mb-1.5 shrink-0 font-sans text-[10.5px] font-medium tracking-wide text-[#9a9078] uppercase">
           Steps
         </h3>
         <ol className="min-h-0 flex-1 space-y-0 overflow-y-auto pr-1">
@@ -215,9 +215,9 @@ function RecipeStepView({ recipe, query, onBack, initialFavorited = false }) {
         </ol>
       </div>
 
-      <div className="shrink-0 border-t border-[#d2cebe] bg-cm-bg py-2">
+      <div className="mt-2 shrink-0 border-t border-[#d2cebe] bg-cm-bg pt-2 pb-0.5">
         {queryReply && (
-          <p className="mb-2 max-h-12 overflow-y-auto rounded-lg border-[1.5px] border-[#c8c2a8] bg-[#e4e0ce] px-2.5 py-1.5 font-sans text-[11.5px] leading-snug text-[#58523e]">
+          <p className="mb-1.5 max-h-12 overflow-y-auto rounded-lg border-[1.5px] border-[#c8c2a8] bg-[#e4e0ce] px-2.5 py-1.5 font-sans text-[11.5px] leading-snug text-[#58523e]">
             {queryReply}
           </p>
         )}
@@ -388,14 +388,16 @@ export default function Recipe() {
 
   if (phase === "cooking" && recipe) {
     return (
-      <PageShell className="mx-auto flex h-[calc(100dvh-3.25rem)] max-w-2xl flex-col overflow-hidden !space-y-0 !pt-11 !pb-3">
-        <RecipeStepView
-          recipe={recipe}
-          query={text}
-          onBack={handleBackToSearch}
-          initialFavorited={initialFavorited}
-        />
-      </PageShell>
+      <div className="flex h-dvh flex-col overflow-hidden">
+        <PageShell className="mx-auto flex h-full min-h-0 max-w-2xl flex-1 flex-col overflow-hidden !space-y-0 !px-4 !pt-10 !pb-5 sm:!px-5">
+          <RecipeStepView
+            recipe={recipe}
+            query={text}
+            onBack={handleBackToSearch}
+            initialFavorited={initialFavorited}
+          />
+        </PageShell>
+      </div>
     );
   }
 
