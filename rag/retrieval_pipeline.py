@@ -12,7 +12,9 @@ client = OpenAI()
 
 
 
-persist_directory = "db/chroma_db"
+import os
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+persist_directory = os.path.join(BASE_DIR, "db", "chroma_db")
 
 # ✅ SAME MODEL AS INGESTION
 embedding_model = HuggingFaceEmbeddings(

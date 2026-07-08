@@ -295,6 +295,18 @@ function RecipeStepView({ recipe, query, onBack, initialFavorited = false }) {
   );
 }
 
+function parseSteps(content) {
+  if (!content) return [];
+  const index = content.indexOf("Instructions:");
+  if (index === -1) return [];
+  const afterInstructions = content.slice(index + "Instructions:".length);
+  return afterInstructions
+    .split("\n")
+    .map(step => step.trim())
+    .filter(step => step.length > 0)
+    .map(step => step.replace(/^\d+\.\s*/, ""));
+}
+
 export default function Recipe() {
   const { mode: modeParam } = useParams();
   const navigate = useNavigate();
@@ -313,6 +325,9 @@ export default function Recipe() {
       : null
   );
   const [initialFavorited] = useState(Boolean(navState?.favorited));
+  const [recipes, setRecipes] = useState(null);
+  const [selectedRecipe, setSelectedRecipe] = useState(null);
+  const [error, setError] = useState(null);
   const [currentMode, setCurrentMode] = useState(initialMode);
   const inputRef = useRef(null);
   const prevModeRef = useRef(currentMode);
@@ -342,6 +357,9 @@ export default function Recipe() {
     setText("");
     setPhase("search");
     setRecipe(null);
+    setRecipes(null);
+    setSelectedRecipe(null);
+    setError(null);
     inputRef.current?.focus();
   }, [currentMode]);
 
@@ -355,18 +373,52 @@ export default function Recipe() {
   }, [phase]);
 
   const handleInput = (e) => {
-    setText(e.target.value);
+    const val = e.target.value;
+    setText(val);
+    if (!val.trim()) {
+      setRecipes(null);
+      setSelectedRecipe(null);
+      setError(null);
+    }
     e.target.style.height = "auto";
     e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
   };
 
   const handleSubmit = () => {
     if (!text.trim()) return;
-    setPhase("loading");
-    setTimeout(() => {
-      setRecipe(getDummyRecipe(text));
-      setPhase("cooking");
-    }, 1400);
+    if (currentMode === "dish") {
+      setPhase("loading");
+      setError(null);
+      setRecipes(null);
+      setSelectedRecipe(null);
+      fetch("http://127.0.0.1:8000/get-recipe", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ query: text }),
+      })
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error("Failed to fetch recipes. Please try again.");
+          }
+          return res.json();
+        })
+        .then((data) => {
+          setRecipes(data.recipes || []);
+          setPhase("search");
+        })
+        .catch((err) => {
+          setError(err.message || "Failed to fetch recipes. Please try again.");
+          setPhase("search");
+        });
+    } else {
+      setPhase("loading");
+      setTimeout(() => {
+        setRecipe(getDummyRecipe(text));
+        setPhase("cooking");
+      }, 1400);
+    }
   };
 
   const handleKeyDown = (e) => {
@@ -456,58 +508,145 @@ export default function Recipe() {
 
         {phase === "search" && (
           <>
-            <div className="flex flex-col items-center gap-4 py-2">
-              <div className="relative h-[88px] w-[88px]">
-                <div className="mic-ring" style={{ opacity: listening ? 0.55 : 0.28 }} />
-                <div className="mic-ring" style={{ opacity: listening ? 0.55 : 0.18 }} />
-                <div className="mic-ring" style={{ opacity: listening ? 0.55 : 0.1 }} />
-
-                <button
-                  type="button"
-                  onClick={() => setListening((l) => !l)}
-                  className={`relative flex h-[88px] w-[88px] shrink-0 items-center justify-center rounded-full border-none transition-[background,transform] outline-none hover:scale-105 hover:bg-[#5a7840] ${
-                    listening
-                      ? "animate-[mic-throb_0.8s_ease-in-out_infinite] bg-cm-danger hover:bg-cm-danger"
-                      : "bg-cm-olive"
-                  }`}
-                >
-                  {listening ? (
-                    <WaveForm active />
-                  ) : (
-                    <Mic className="size-7 shrink-0 text-[#f0ede0]" strokeWidth={1.8} />
-                  )}
-                </button>
+            {error && (
+              <div className="rounded-[20px] border-[1.5px] border-red-200 bg-red-50 p-4 text-center">
+                <p className="font-sans text-sm font-medium text-red-800">{error}</p>
               </div>
+            )}
 
-              <p
-                className={`font-sans text-sm font-light transition-colors ${
-                  listening ? "text-cm-danger" : "text-[#9a9282]"
-                }`}
-              >
-                {listening ? "Listening… tap to stop" : "Tap to speak"}
-              </p>
-            </div>
+            {currentMode === "dish" && recipes !== null ? (
+              selectedRecipe ? (
+                <div className="animate-slide-in space-y-4 rounded-[20px] border-[1.5px] border-cm-card-border bg-cm-card p-6">
+                  <div className="flex items-center justify-between border-b border-[#d8d2bc]/80 pb-3">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedRecipe(null)}
+                      className="inline-flex items-center gap-1 font-sans text-xs font-semibold text-[#789a56] hover:text-[#5a7840] transition-colors"
+                    >
+                      <ChevronLeft className="size-4 shrink-0" strokeWidth={2} />
+                      Back to results
+                    </button>
+                    <span className="rounded-full bg-[#d4dfc4]/55 px-2.5 py-0.5 font-sans text-[11px] font-medium text-cm-olive-muted uppercase">
+                      {selectedRecipe.diet}
+                    </span>
+                  </div>
 
-            <div className="space-y-3">
-              <p className="text-center font-sans text-xs font-medium tracking-wide text-[#9a9282] uppercase">
-                Try one of these
-              </p>
-              <div className="flex flex-wrap justify-center gap-2">
-                {cfg.suggestions.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => {
-                      setText(s);
-                      setTimeout(() => inputRef.current?.focus(), 50);
-                    }}
-                    className="inline-flex items-center rounded-full border-[1.5px] border-[#c8c2a8] bg-[#edeadb] px-4 py-2 font-sans text-sm text-[#5a5648] transition-[background,border-color,transform] hover:-translate-y-0.5 hover:border-[#a8a28a] hover:bg-[#d8d4c0]"
+                  <div className="space-y-1">
+                    <h2 className="font-display text-2xl font-bold text-[#2e3818]">
+                      {selectedRecipe.title}
+                    </h2>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs font-light text-[#7a7462]">
+                      <span>Cuisine: <strong className="font-medium text-[#5a5648]">{selectedRecipe.cuisine}</strong></span>
+                      <span>·</span>
+                      <span>Prep Time: <strong className="font-medium text-[#5a5648]">{selectedRecipe.prep_time} mins</strong></span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h4 className="font-sans text-[10.5px] font-medium tracking-wide text-[#9a9078] uppercase">
+                      Ingredients
+                    </h4>
+                    <ul className="list-disc pl-4 space-y-1">
+                      {selectedRecipe.ingredients.map((ing, idx) => (
+                        <li key={idx} className="font-sans text-xs text-[#58523e]">
+                          {ing}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="space-y-2 border-t border-[#d8d2bc]/80 pt-4">
+                    <h4 className="font-sans text-[10.5px] font-medium tracking-wide text-[#9a9078] uppercase">
+                      Instructions
+                    </h4>
+                    <ol className="list-decimal pl-4 space-y-2.5">
+                      {parseSteps(selectedRecipe.content).map((step, idx) => (
+                        <li key={idx} className="font-sans text-xs leading-relaxed text-[#58523e]">
+                          {step}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                </div>
+              ) : recipes.length > 0 ? (
+                <div className="space-y-3">
+                  <h3 className="text-center font-sans text-xs font-medium tracking-wide text-[#9a9282] uppercase">
+                    Select a Recipe
+                  </h3>
+                  <div className="flex flex-col gap-2">
+                    {recipes.map((r, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => setSelectedRecipe(r)}
+                        className="w-full text-left rounded-xl border-[1.5px] border-[#c8c2a8] bg-[#edeadb] px-4 py-3 font-sans text-sm text-[#5a5648] hover:border-[#a8a28a] hover:bg-[#d8d4c0] transition-colors"
+                      >
+                        {r.title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="py-8 text-center">
+                  <p className="font-sans text-sm text-[#9a9282]">No recipe found</p>
+                </div>
+              )
+            ) : (
+              <>
+                <div className="flex flex-col items-center gap-4 py-2">
+                  <div className="relative h-[88px] w-[88px]">
+                    <div className="mic-ring" style={{ opacity: listening ? 0.55 : 0.28 }} />
+                    <div className="mic-ring" style={{ opacity: listening ? 0.55 : 0.18 }} />
+                    <div className="mic-ring" style={{ opacity: listening ? 0.55 : 0.1 }} />
+
+                    <button
+                      type="button"
+                      onClick={() => setListening((l) => !l)}
+                      className={`relative flex h-[88px] w-[88px] shrink-0 items-center justify-center rounded-full border-none transition-[background,transform] outline-none hover:scale-105 hover:bg-[#5a7840] ${
+                        listening
+                          ? "animate-[mic-throb_0.8s_ease-in-out_infinite] bg-cm-danger hover:bg-cm-danger"
+                          : "bg-cm-olive"
+                      }`}
+                    >
+                      {listening ? (
+                        <WaveForm active />
+                      ) : (
+                        <Mic className="size-7 shrink-0 text-[#f0ede0]" strokeWidth={1.8} />
+                      )}
+                    </button>
+                  </div>
+
+                  <p
+                    className={`font-sans text-sm font-light transition-colors ${
+                      listening ? "text-cm-danger" : "text-[#9a9282]"
+                    }`}
                   >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
+                    {listening ? "Listening… tap to stop" : "Tap to speak"}
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-center font-sans text-xs font-medium tracking-wide text-[#9a9282] uppercase">
+                    Try one of these
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {cfg.suggestions.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => {
+                          setText(s);
+                          setTimeout(() => inputRef.current?.focus(), 50);
+                        }}
+                        className="inline-flex items-center rounded-full border-[1.5px] border-[#c8c2a8] bg-[#edeadb] px-4 py-2 font-sans text-sm text-[#5a5648] transition-[background,border-color,transform] hover:-translate-y-0.5 hover:border-[#a8a28a] hover:bg-[#d8d4c0]"
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </>
         )}
 
