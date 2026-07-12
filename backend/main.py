@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from rag.retrieval_pipeline import run_rag
+from rag.retrieval_pipeline import run_rag, generate_fallback_recipes, modify_recipe_llm
 
 app = FastAPI()
 
@@ -20,6 +20,12 @@ def health_check():
 
 class RecipeRequest(BaseModel):
     query: str
+    max_prep_time: int | None = None
+
+
+class ModifyRecipeRequest(BaseModel):
+    recipe: dict
+    request: str
 
 
 def doc_to_dict(doc):
@@ -36,15 +42,31 @@ def doc_to_dict(doc):
 
 @app.post("/get-recipe")
 def get_recipe(request: RecipeRequest):
-    filtered_docs, all_docs = run_rag(request.query)
+    filtered_docs, all_docs = run_rag(request.query, max_prep_time=request.max_prep_time)
 
     if filtered_docs:
         return {
             "status": "found",
             "recipes": [doc_to_dict(d) for d in filtered_docs[:5]]
         }
-    else:
+
+    fallback_recipes = generate_fallback_recipes(request.query, max_prep_time=request.max_prep_time)
+    if fallback_recipes:
         return {
-            "status": "not_found",
-            "recipes": []
+            "status": "found",
+            "recipes": fallback_recipes
         }
+
+    return {
+        "status": "not_found",
+        "recipes": []
+    }
+
+
+@app.post("/modify-recipe")
+def modify_recipe(req: ModifyRecipeRequest):
+    modified = modify_recipe_llm(req.recipe, req.request)
+    if modified:
+        return {"status": "success", "recipe": modified}
+    else:
+        return {"status": "error", "recipe": None}

@@ -329,6 +329,11 @@ export default function Recipe() {
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [error, setError] = useState(null);
   const [currentMode, setCurrentMode] = useState(initialMode);
+
+  // Modification state
+  const [modText, setModText] = useState("");
+  const [modLoading, setModLoading] = useState(false);
+  const [modError, setModError] = useState(null);
   const inputRef = useRef(null);
   const prevModeRef = useRef(currentMode);
 
@@ -343,6 +348,12 @@ export default function Recipe() {
       navigate(location.pathname, { replace: true, state: null });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    setModText("");
+    setModError(null);
+    setModLoading(false);
+  }, [selectedRecipe]);
 
   useEffect(() => {
     if (phase === "search") {
@@ -386,39 +397,49 @@ export default function Recipe() {
 
   const handleSubmit = () => {
     if (!text.trim()) return;
-    if (currentMode === "dish") {
-      setPhase("loading");
-      setError(null);
-      setRecipes(null);
-      setSelectedRecipe(null);
-      fetch("http://127.0.0.1:8000/get-recipe", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ query: text }),
-      })
-        .then((res) => {
-          if (!res.ok) {
-            throw new Error("Failed to fetch recipes. Please try again.");
-          }
-          return res.json();
-        })
-        .then((data) => {
-          setRecipes(data.recipes || []);
-          setPhase("search");
-        })
-        .catch((err) => {
-          setError(err.message || "Failed to fetch recipes. Please try again.");
-          setPhase("search");
-        });
-    } else {
-      setPhase("loading");
-      setTimeout(() => {
-        setRecipe(getDummyRecipe(text));
-        setPhase("cooking");
-      }, 1400);
+
+    setPhase("loading");
+    setError(null);
+    setRecipes(null);
+    setSelectedRecipe(null);
+
+    let max_prep_time;
+    if (currentMode === "quick") {
+      let match = text.match(/^\s*(\d+)\s*$/);
+      if (!match) {
+        match = text.match(/\b(\d+)\s*(?:-?\s*min|minute|m\b)/i);
+      }
+      if (match) {
+        max_prep_time = parseInt(match[1], 10);
+      }
     }
+
+    const body = { query: text };
+    if (max_prep_time !== undefined) {
+      body.max_prep_time = max_prep_time;
+    }
+
+    fetch("http://127.0.0.1:8000/get-recipe", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    })
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error("Failed to fetch recipes. Please try again.");
+        }
+        return res.json();
+      })
+      .then((data) => {
+        setRecipes(data.recipes || []);
+        setPhase("search");
+      })
+      .catch((err) => {
+        setError(err.message || "Failed to fetch recipes. Please try again.");
+        setPhase("search");
+      });
   };
 
   const handleKeyDown = (e) => {
@@ -426,6 +447,43 @@ export default function Recipe() {
       e.preventDefault();
       handleSubmit();
     }
+  };
+
+  const handleModifyRecipe = () => {
+    if (!modText.trim() || modLoading || !selectedRecipe) return;
+    setModLoading(true);
+    setModError(null);
+
+    fetch("http://127.0.0.1:8000/modify-recipe", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        recipe: selectedRecipe,
+        request: modText.trim(),
+      }),
+    })
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error("Failed to modify recipe. Please try again.");
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (data.status === "success" && data.recipe) {
+          setSelectedRecipe(data.recipe);
+          setModText("");
+        } else {
+          throw new Error("Failed to modify recipe.");
+        }
+      })
+      .catch((err) => {
+        setModError(err.message || "Failed to modify recipe. Please try again.");
+      })
+      .finally(() => {
+        setModLoading(false);
+      });
   };
 
   const handleModeChange = (key) => {
@@ -514,7 +572,7 @@ export default function Recipe() {
               </div>
             )}
 
-            {currentMode === "dish" && recipes !== null ? (
+            {(currentMode === "dish" || currentMode === "ingredients" || currentMode === "quick") && recipes !== null ? (
               selectedRecipe ? (
                 <div className="animate-slide-in space-y-4 rounded-[20px] border-[1.5px] border-cm-card-border bg-cm-card p-6">
                   <div className="flex items-center justify-between border-b border-[#d8d2bc]/80 pb-3">
@@ -532,9 +590,18 @@ export default function Recipe() {
                   </div>
 
                   <div className="space-y-1">
-                    <h2 className="font-display text-2xl font-bold text-[#2e3818]">
-                      {selectedRecipe.title}
-                    </h2>
+                    <div className="flex items-start justify-between">
+                      <h2 className="font-display text-2xl font-bold text-[#2e3818]">
+                        {selectedRecipe.title}
+                      </h2>
+                      <button
+                        type="button"
+                        onClick={() => {}}
+                        className="inline-flex items-center rounded-full border-[1.5px] border-[#5a7040] bg-cm-olive-dark px-4 py-1.5 font-sans text-xs font-semibold text-[#f0ede0] hover:bg-[#6a8050] transition-colors whitespace-nowrap ml-4"
+                      >
+                        Start Recipe
+                      </button>
+                    </div>
                     <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs font-light text-[#7a7462]">
                       <span>Cuisine: <strong className="font-medium text-[#5a5648]">{selectedRecipe.cuisine}</strong></span>
                       <span>·</span>
@@ -566,6 +633,41 @@ export default function Recipe() {
                         </li>
                       ))}
                     </ol>
+                  </div>
+
+                  {/* Modification Chat Input */}
+                  <div className="space-y-2 border-t border-[#d8d2bc]/80 pt-4">
+                    <h4 className="font-sans text-[10.5px] font-medium tracking-wide text-[#9a9078] uppercase">
+                      Request Modifications
+                    </h4>
+                    {modError && (
+                      <p className="font-sans text-xs font-medium text-red-800 bg-red-50 p-2 rounded-lg border border-red-100">
+                        {modError}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-full border-[1.5px] border-[#c8c2a8] bg-[#edead9] py-1 pl-3 pr-1">
+                        <MessageCircle className="size-3.5 shrink-0 text-[#789a56]" strokeWidth={1.7} />
+                        <input
+                          type="text"
+                          value={modText}
+                          onChange={(e) => setModText(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && handleModifyRecipe()}
+                          placeholder={modLoading ? "Modifying recipe..." : "Ask to swap ingredients, scale, etc..."}
+                          disabled={modLoading}
+                          className="min-w-0 flex-1 border-none bg-transparent py-1.5 font-sans text-[12.5px] text-[#2c2818] outline-none placeholder:font-light placeholder:text-[#9a9078] disabled:opacity-60"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleModifyRecipe}
+                          disabled={!modText.trim() || modLoading}
+                          aria-label="Send modification request"
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-none bg-cm-olive transition-[background,transform] enabled:hover:bg-[#5a7840] disabled:bg-[#c8c2ae]"
+                        >
+                          <Send className="size-3.5 shrink-0 text-[#f0ede0]" strokeWidth={1.7} />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ) : recipes.length > 0 ? (
