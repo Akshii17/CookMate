@@ -2,7 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from rag.retrieval_pipeline import run_rag, generate_fallback_recipes, modify_recipe_llm
+from rag.retrieval_pipeline import (
+    run_rag,
+    generate_fallback_recipes,
+    modify_recipe_llm,
+    answer_step_question_llm,
+)
 
 app = FastAPI()
 
@@ -26,6 +31,14 @@ class RecipeRequest(BaseModel):
 class ModifyRecipeRequest(BaseModel):
     recipe: dict
     request: str
+
+
+class AskQuestionRequest(BaseModel):
+    recipe: dict
+    current_step_text: str
+    step_number: int
+    total_steps: int
+    question: str
 
 
 def doc_to_dict(doc):
@@ -70,3 +83,17 @@ def modify_recipe(req: ModifyRecipeRequest):
         return {"status": "success", "recipe": modified}
     else:
         return {"status": "error", "recipe": None}
+
+
+@app.post("/ask-question")
+def ask_question(req: AskQuestionRequest):
+    answer = answer_step_question_llm(
+        req.recipe,
+        req.current_step_text,
+        req.step_number,
+        req.total_steps,
+        req.question,
+    )
+    if answer:
+        return {"status": "success", "answer": answer}
+    return {"status": "error", "answer": None}

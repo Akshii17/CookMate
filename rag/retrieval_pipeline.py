@@ -388,3 +388,99 @@ def modify_recipe_llm(recipe: dict, modification_request: str) -> dict | None:
     except Exception:
         return None
 
+
+def answer_step_question_llm(
+    recipe: dict,
+    current_step_text: str,
+    step_number: int,
+    total_steps: int,
+    question: str,
+) -> str | None:
+    title = recipe.get("title", "")
+    ingredients = recipe.get("ingredients", [])
+    steps = recipe.get("steps", [])
+
+    if not steps and recipe.get("content"):
+        content = recipe["content"]
+        if "Instructions:" in content:
+            raw = content.split("Instructions:")[1]
+            steps = [
+                re.sub(r"^\d+\.\s*", "", s.strip())
+                for s in raw.split("\n")
+                if s.strip()
+            ]
+
+    ingredients_str = "\n".join(f"- {ing}" for ing in ingredients)
+    steps_str = "\n".join(f"{i}. {step}" for i, step in enumerate(steps, 1))
+
+    prompt = (
+        f"You are helping a user cook: {title}\n\n"
+        f"Ingredients:\n{ingredients_str}\n\n"
+        f"All steps:\n{steps_str}\n\n"
+        f"The user is currently on step {step_number} of {total_steps}:\n"
+        f"\"{current_step_text}\"\n\n"
+        f"Question: {question}\n\n"
+        "Answer in 2-4 concise sentences. Plain text only, no preamble, no JSON."
+    )
+
+    try:
+        response = client.responses.create(
+            model="gpt-4o-mini",
+            input=prompt,
+            max_output_tokens=300,
+        )
+        text = response.output_text
+        if not text or not text.strip():
+            return None
+        return text.strip()
+    except Exception:
+        return None
+
+
+def answer_step_question_llm(
+    recipe: dict,
+    current_step_text: str,
+    step_number: int,
+    total_steps: int,
+    question: str,
+) -> str | None:
+    title = recipe.get("title", "")
+    ingredients = recipe.get("ingredients", [])
+    steps = recipe.get("steps", [])
+
+    if not steps and recipe.get("content"):
+        content = recipe["content"]
+        if "Instructions:" in content:
+            raw = content.split("Instructions:")[1]
+            steps = [
+                re.sub(r"^\d+\.\s*", "", s.strip())
+                for s in raw.split("\n")
+                if s.strip()
+            ]
+
+    ingredients_str = "\n".join(f"- {ing}" for ing in ingredients)
+    steps_str = "\n".join(f"{i}. {step}" for i, step in enumerate(steps, 1))
+
+    prompt = (
+        f"You are helping a user cook: {title}\n\n"
+        f"Ingredients:\n{ingredients_str}\n\n"
+        f"All steps:\n{steps_str}\n\n"
+        f"The user is currently on step {step_number} of {total_steps}:\n"
+        f"\"{current_step_text}\"\n\n"
+        f"Question: {question}\n\n"
+        "Answer in 2-4 concise sentences. Plain text only, no preamble, no JSON."
+    )
+
+    try:
+        response = client.responses.create(
+            model="gpt-4o-mini",
+            input=prompt,
+            max_output_tokens=300,
+        )
+        text = response.output_text
+        if not text or not text.strip():
+            return None
+        return text.strip()
+    except Exception:
+        return None
+

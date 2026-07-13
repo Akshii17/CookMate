@@ -11,6 +11,7 @@ import {
   Heart,
   Clock,
   MessageCircle,
+  X,
 } from "lucide-react";
 import { PageShell, PageChip, PageHero } from "../components/PageShell";
 
@@ -52,6 +53,7 @@ function RecipeStepView({ recipe, query, onBack, initialFavorited = false }) {
   const [heartPop, setHeartPop] = useState(false);
   const [queryText, setQueryText] = useState("");
   const [queryReply, setQueryReply] = useState(null);
+  const [queryLoading, setQueryLoading] = useState(false);
   const stepRef = useRef(null);
 
   const totalSteps = recipe.steps.length;
@@ -105,11 +107,48 @@ function RecipeStepView({ recipe, query, onBack, initialFavorited = false }) {
   }, [listening, handleVoiceCommand]);
 
   const handleAskQuery = () => {
-    if (!queryText.trim()) return;
-    setQueryReply(
-      `For step ${stepIndex + 1}: That's a great question about "${queryText.trim()}". In a full build, the AI would answer based on this recipe's context.`
-    );
-    setQueryText("");
+    if (!queryText.trim() || queryLoading) return;
+    const question = queryText.trim();
+    setQueryLoading(true);
+
+    fetch("http://127.0.0.1:8000/ask-question", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        recipe: {
+          title: recipe.name,
+          ingredients: recipe.ingredients,
+          steps: recipe.steps,
+        },
+        current_step_text: recipe.steps[stepIndex],
+        step_number: stepIndex + 1,
+        total_steps: totalSteps,
+        question,
+      }),
+    })
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error("Request failed");
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (data.status === "success" && data.answer) {
+          setQueryReply(data.answer);
+        } else {
+          setQueryReply("Sorry, I couldn't answer that right now. Please try again.");
+        }
+        setQueryText("");
+      })
+      .catch(() => {
+        setQueryReply("Sorry, I couldn't reach the server. Please try again.");
+        setQueryText("");
+      })
+      .finally(() => {
+        setQueryLoading(false);
+      });
   };
 
   const toggleFavorite = () => {
@@ -217,9 +256,17 @@ function RecipeStepView({ recipe, query, onBack, initialFavorited = false }) {
 
       <div className="mt-2 shrink-0 border-t border-[#d2cebe] bg-cm-bg pt-2 pb-0.5">
         {queryReply && (
-          <p className="mb-1.5 max-h-12 overflow-y-auto rounded-lg border-[1.5px] border-[#c8c2a8] bg-[#e4e0ce] px-2.5 py-1.5 font-sans text-[11.5px] leading-snug text-[#58523e]">
-            {queryReply}
-          </p>
+          <div className="relative mb-1.5 max-h-12 overflow-y-auto rounded-lg border-[1.5px] border-[#c8c2a8] bg-[#e4e0ce] px-3.5 py-2.5 pr-7 font-sans text-[13.5px] leading-snug text-[#58523e]">
+            <p>{queryReply}</p>
+            <button
+              type="button"
+              onClick={() => setQueryReply(null)}
+              aria-label="Dismiss reply"
+              className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full text-[#78735e] transition-colors hover:bg-[#d8d4c0] hover:text-[#2c2818]"
+            >
+              <X className="size-3 shrink-0" strokeWidth={2} />
+            </button>
+          </div>
         )}
 
         <div className="flex items-center gap-2">
@@ -230,13 +277,14 @@ function RecipeStepView({ recipe, query, onBack, initialFavorited = false }) {
               value={queryText}
               onChange={(e) => setQueryText(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleAskQuery()}
-              placeholder="Ask about this step…"
-              className="min-w-0 flex-1 border-none bg-transparent py-1.5 font-sans text-[12.5px] text-[#2c2818] outline-none placeholder:font-light placeholder:text-[#9a9078]"
+              placeholder={queryLoading ? "Thinking…" : "Ask about this step…"}
+              disabled={queryLoading}
+              className="min-w-0 flex-1 border-none bg-transparent py-1.5 font-sans text-[13.5px] text-[#2c2818] outline-none placeholder:font-light placeholder:text-[#9a9078] disabled:opacity-60"
             />
             <button
               type="button"
               onClick={handleAskQuery}
-              disabled={!queryText.trim()}
+              disabled={!queryText.trim() || queryLoading}
               aria-label="Send question"
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-none bg-cm-olive transition-[background,transform] enabled:hover:bg-[#5a7840] disabled:bg-[#c8c2ae]"
             >
@@ -496,6 +544,18 @@ export default function Recipe() {
     setRecipe(null);
   };
 
+  const handleStartRecipe = () => {
+    if (!selectedRecipe) return;
+    const steps = parseSteps(selectedRecipe.content);
+    setRecipe({
+      name: selectedRecipe.title,
+      prepTime: selectedRecipe.prep_time,
+      ingredients: selectedRecipe.ingredients,
+      steps,
+    });
+    setPhase("cooking");
+  };
+
   if (phase === "cooking" && recipe) {
     return (
       <div className="flex h-dvh flex-col overflow-hidden">
@@ -596,7 +656,7 @@ export default function Recipe() {
                       </h2>
                       <button
                         type="button"
-                        onClick={() => {}}
+                        onClick={handleStartRecipe}
                         className="inline-flex items-center rounded-full border-[1.5px] border-[#5a7040] bg-cm-olive-dark px-4 py-1.5 font-sans text-xs font-semibold text-[#f0ede0] hover:bg-[#6a8050] transition-colors whitespace-nowrap ml-4"
                       >
                         Start Recipe
