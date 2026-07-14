@@ -58,6 +58,12 @@ function RecipeStepView({ recipe, query, onBack, initialFavorited = false }) {
 
   const totalSteps = recipe.steps.length;
 
+  useEffect(() => {
+    return () => {
+      window.speechSynthesis?.cancel();
+    };
+  }, []);
+
   const goNext = useCallback(() => {
     setStepIndex((i) => Math.min(i + 1, totalSteps - 1));
   }, [totalSteps]);
@@ -74,17 +80,85 @@ function RecipeStepView({ recipe, query, onBack, initialFavorited = false }) {
     }
   }, []);
 
+  const speak = useCallback((text) => {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel(); // stop anything currently being read
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "en-US";
+    window.speechSynthesis.speak(utterance);
+  }, []);
+
+  const submitQuestion = useCallback(
+    (question) => {
+      if (!question.trim() || queryLoading) return;
+      const trimmed = question.trim();
+      setQueryLoading(true);
+
+      fetch("http://127.0.0.1:8000/ask-question", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          recipe: {
+            title: recipe.name,
+            ingredients: recipe.ingredients,
+            steps: recipe.steps,
+          },
+          current_step_text: recipe.steps[stepIndex],
+          step_number: stepIndex + 1,
+          total_steps: totalSteps,
+          question: trimmed,
+        }),
+      })
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error("Request failed");
+          }
+          return res.json();
+        })
+        .then((data) => {
+          if (data.status === "success" && data.answer) {
+            setQueryReply(data.answer);
+            speak(data.answer);
+          } else {
+            const msg = "Sorry, I couldn't answer that right now. Please try again.";
+            setQueryReply(msg);
+            speak(msg);
+          }
+          setQueryText("");
+        })
+        .catch(() => {
+          setQueryReply("Sorry, I couldn't reach the server. Please try again.");
+          setQueryText("");
+        })
+        .finally(() => {
+          setQueryLoading(false);
+        });
+    },
+    [recipe, stepIndex, totalSteps, queryLoading, speak]
+  );
+
+  const handleAskQuery = () => {
+    submitQuestion(queryText);
+  };
+
   const handleVoiceCommand = useCallback(
     (transcript) => {
       const t = transcript.toLowerCase();
       if (t.includes("next")) goNext();
       else if (t.includes("prev") || t.includes("back") || t.includes("previous")) goPrev();
       else if (t.includes("repeat")) repeatStep();
+      else {
+        // Not a nav command — treat the whole transcript as a question
+        setQueryText(transcript);
+      }
     },
-    [goNext, goPrev, repeatStep]
+    [goNext, goPrev, repeatStep, submitQuestion]
   );
 
-  useEffect(() => {
+
+    useEffect(() => {
     if (!listening) return;
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
@@ -105,51 +179,6 @@ function RecipeStepView({ recipe, query, onBack, initialFavorited = false }) {
     recognition.start();
     return () => recognition.abort();
   }, [listening, handleVoiceCommand]);
-
-  const handleAskQuery = () => {
-    if (!queryText.trim() || queryLoading) return;
-    const question = queryText.trim();
-    setQueryLoading(true);
-
-    fetch("http://127.0.0.1:8000/ask-question", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        recipe: {
-          title: recipe.name,
-          ingredients: recipe.ingredients,
-          steps: recipe.steps,
-        },
-        current_step_text: recipe.steps[stepIndex],
-        step_number: stepIndex + 1,
-        total_steps: totalSteps,
-        question,
-      }),
-    })
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error("Request failed");
-        }
-        return res.json();
-      })
-      .then((data) => {
-        if (data.status === "success" && data.answer) {
-          setQueryReply(data.answer);
-        } else {
-          setQueryReply("Sorry, I couldn't answer that right now. Please try again.");
-        }
-        setQueryText("");
-      })
-      .catch(() => {
-        setQueryReply("Sorry, I couldn't reach the server. Please try again.");
-        setQueryText("");
-      })
-      .finally(() => {
-        setQueryLoading(false);
-      });
-  };
 
   const toggleFavorite = () => {
     setFavorited((f) => !f);
@@ -260,7 +289,10 @@ function RecipeStepView({ recipe, query, onBack, initialFavorited = false }) {
             <p>{queryReply}</p>
             <button
               type="button"
-              onClick={() => setQueryReply(null)}
+              onClick={() => {
+                window.speechSynthesis?.cancel();
+                setQueryReply(null);
+              }}
               aria-label="Dismiss reply"
               className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full text-[#78735e] transition-colors hover:bg-[#d8d4c0] hover:text-[#2c2818]"
             >
