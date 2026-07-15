@@ -11,6 +11,7 @@ import {
   Heart,
   Clock,
   MessageCircle,
+  X,
 } from "lucide-react";
 import { PageShell, PageChip, PageHero } from "../components/PageShell";
 
@@ -52,9 +53,16 @@ function RecipeStepView({ recipe, query, onBack, initialFavorited = false }) {
   const [heartPop, setHeartPop] = useState(false);
   const [queryText, setQueryText] = useState("");
   const [queryReply, setQueryReply] = useState(null);
+  const [queryLoading, setQueryLoading] = useState(false);
   const stepRef = useRef(null);
 
   const totalSteps = recipe.steps.length;
+
+  useEffect(() => {
+    return () => {
+      window.speechSynthesis?.cancel();
+    };
+  }, []);
 
   const goNext = useCallback(() => {
     setStepIndex((i) => Math.min(i + 1, totalSteps - 1));
@@ -72,17 +80,85 @@ function RecipeStepView({ recipe, query, onBack, initialFavorited = false }) {
     }
   }, []);
 
+  const speak = useCallback((text) => {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel(); // stop anything currently being read
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "en-US";
+    window.speechSynthesis.speak(utterance);
+  }, []);
+
+  const submitQuestion = useCallback(
+    (question) => {
+      if (!question.trim() || queryLoading) return;
+      const trimmed = question.trim();
+      setQueryLoading(true);
+
+      fetch("http://127.0.0.1:8000/ask-question", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          recipe: {
+            title: recipe.name,
+            ingredients: recipe.ingredients,
+            steps: recipe.steps,
+          },
+          current_step_text: recipe.steps[stepIndex],
+          step_number: stepIndex + 1,
+          total_steps: totalSteps,
+          question: trimmed,
+        }),
+      })
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error("Request failed");
+          }
+          return res.json();
+        })
+        .then((data) => {
+          if (data.status === "success" && data.answer) {
+            setQueryReply(data.answer);
+            speak(data.answer);
+          } else {
+            const msg = "Sorry, I couldn't answer that right now. Please try again.";
+            setQueryReply(msg);
+            speak(msg);
+          }
+          setQueryText("");
+        })
+        .catch(() => {
+          setQueryReply("Sorry, I couldn't reach the server. Please try again.");
+          setQueryText("");
+        })
+        .finally(() => {
+          setQueryLoading(false);
+        });
+    },
+    [recipe, stepIndex, totalSteps, queryLoading, speak]
+  );
+
+  const handleAskQuery = () => {
+    submitQuestion(queryText);
+  };
+
   const handleVoiceCommand = useCallback(
     (transcript) => {
       const t = transcript.toLowerCase();
       if (t.includes("next")) goNext();
       else if (t.includes("prev") || t.includes("back") || t.includes("previous")) goPrev();
       else if (t.includes("repeat")) repeatStep();
+      else {
+        // Not a nav command — treat the whole transcript as a question
+        setQueryText(transcript);
+      }
     },
-    [goNext, goPrev, repeatStep]
+    [goNext, goPrev, repeatStep, submitQuestion]
   );
 
-  useEffect(() => {
+
+    useEffect(() => {
     if (!listening) return;
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
@@ -103,14 +179,6 @@ function RecipeStepView({ recipe, query, onBack, initialFavorited = false }) {
     recognition.start();
     return () => recognition.abort();
   }, [listening, handleVoiceCommand]);
-
-  const handleAskQuery = () => {
-    if (!queryText.trim()) return;
-    setQueryReply(
-      `For step ${stepIndex + 1}: That's a great question about "${queryText.trim()}". In a full build, the AI would answer based on this recipe's context.`
-    );
-    setQueryText("");
-  };
 
   const toggleFavorite = () => {
     setFavorited((f) => !f);
@@ -217,9 +285,20 @@ function RecipeStepView({ recipe, query, onBack, initialFavorited = false }) {
 
       <div className="mt-2 shrink-0 border-t border-[#d2cebe] bg-cm-bg pt-2 pb-0.5">
         {queryReply && (
-          <p className="mb-1.5 max-h-12 overflow-y-auto rounded-lg border-[1.5px] border-[#c8c2a8] bg-[#e4e0ce] px-2.5 py-1.5 font-sans text-[11.5px] leading-snug text-[#58523e]">
-            {queryReply}
-          </p>
+          <div className="relative mb-1.5 max-h-12 overflow-y-auto rounded-lg border-[1.5px] border-[#c8c2a8] bg-[#e4e0ce] px-3.5 py-2.5 pr-7 font-sans text-[13.5px] leading-snug text-[#58523e]">
+            <p>{queryReply}</p>
+            <button
+              type="button"
+              onClick={() => {
+                window.speechSynthesis?.cancel();
+                setQueryReply(null);
+              }}
+              aria-label="Dismiss reply"
+              className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full text-[#78735e] transition-colors hover:bg-[#d8d4c0] hover:text-[#2c2818]"
+            >
+              <X className="size-3 shrink-0" strokeWidth={2} />
+            </button>
+          </div>
         )}
 
         <div className="flex items-center gap-2">
@@ -230,13 +309,14 @@ function RecipeStepView({ recipe, query, onBack, initialFavorited = false }) {
               value={queryText}
               onChange={(e) => setQueryText(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleAskQuery()}
-              placeholder="Ask about this step…"
-              className="min-w-0 flex-1 border-none bg-transparent py-1.5 font-sans text-[12.5px] text-[#2c2818] outline-none placeholder:font-light placeholder:text-[#9a9078]"
+              placeholder={queryLoading ? "Thinking…" : "Ask about this step…"}
+              disabled={queryLoading}
+              className="min-w-0 flex-1 border-none bg-transparent py-1.5 font-sans text-[13.5px] text-[#2c2818] outline-none placeholder:font-light placeholder:text-[#9a9078] disabled:opacity-60"
             />
             <button
               type="button"
               onClick={handleAskQuery}
-              disabled={!queryText.trim()}
+              disabled={!queryText.trim() || queryLoading}
               aria-label="Send question"
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-none bg-cm-olive transition-[background,transform] enabled:hover:bg-[#5a7840] disabled:bg-[#c8c2ae]"
             >
@@ -295,6 +375,18 @@ function RecipeStepView({ recipe, query, onBack, initialFavorited = false }) {
   );
 }
 
+function parseSteps(content) {
+  if (!content) return [];
+  const index = content.indexOf("Instructions:");
+  if (index === -1) return [];
+  const afterInstructions = content.slice(index + "Instructions:".length);
+  return afterInstructions
+    .split("\n")
+    .map(step => step.trim())
+    .filter(step => step.length > 0)
+    .map(step => step.replace(/^\d+\.\s*/, ""));
+}
+
 export default function Recipe() {
   const { mode: modeParam } = useParams();
   const navigate = useNavigate();
@@ -313,7 +405,15 @@ export default function Recipe() {
       : null
   );
   const [initialFavorited] = useState(Boolean(navState?.favorited));
+  const [recipes, setRecipes] = useState(null);
+  const [selectedRecipe, setSelectedRecipe] = useState(null);
+  const [error, setError] = useState(null);
   const [currentMode, setCurrentMode] = useState(initialMode);
+
+  // Modification state
+  const [modText, setModText] = useState("");
+  const [modLoading, setModLoading] = useState(false);
+  const [modError, setModError] = useState(null);
   const inputRef = useRef(null);
   const prevModeRef = useRef(currentMode);
 
@@ -330,6 +430,12 @@ export default function Recipe() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    setModText("");
+    setModError(null);
+    setModLoading(false);
+  }, [selectedRecipe]);
+
+  useEffect(() => {
     if (phase === "search") {
       const t = setTimeout(() => inputRef.current?.focus(), 400);
       return () => clearTimeout(t);
@@ -342,6 +448,9 @@ export default function Recipe() {
     setText("");
     setPhase("search");
     setRecipe(null);
+    setRecipes(null);
+    setSelectedRecipe(null);
+    setError(null);
     inputRef.current?.focus();
   }, [currentMode]);
 
@@ -355,18 +464,62 @@ export default function Recipe() {
   }, [phase]);
 
   const handleInput = (e) => {
-    setText(e.target.value);
+    const val = e.target.value;
+    setText(val);
+    if (!val.trim()) {
+      setRecipes(null);
+      setSelectedRecipe(null);
+      setError(null);
+    }
     e.target.style.height = "auto";
     e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
   };
 
   const handleSubmit = () => {
     if (!text.trim()) return;
+
     setPhase("loading");
-    setTimeout(() => {
-      setRecipe(getDummyRecipe(text));
-      setPhase("cooking");
-    }, 1400);
+    setError(null);
+    setRecipes(null);
+    setSelectedRecipe(null);
+
+    let max_prep_time;
+    if (currentMode === "quick") {
+      let match = text.match(/^\s*(\d+)\s*$/);
+      if (!match) {
+        match = text.match(/\b(\d+)\s*(?:-?\s*min|minute|m\b)/i);
+      }
+      if (match) {
+        max_prep_time = parseInt(match[1], 10);
+      }
+    }
+
+    const body = { query: text };
+    if (max_prep_time !== undefined) {
+      body.max_prep_time = max_prep_time;
+    }
+
+    fetch("http://127.0.0.1:8000/get-recipe", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    })
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error("Failed to fetch recipes. Please try again.");
+        }
+        return res.json();
+      })
+      .then((data) => {
+        setRecipes(data.recipes || []);
+        setPhase("search");
+      })
+      .catch((err) => {
+        setError(err.message || "Failed to fetch recipes. Please try again.");
+        setPhase("search");
+      });
   };
 
   const handleKeyDown = (e) => {
@@ -374,6 +527,43 @@ export default function Recipe() {
       e.preventDefault();
       handleSubmit();
     }
+  };
+
+  const handleModifyRecipe = () => {
+    if (!modText.trim() || modLoading || !selectedRecipe) return;
+    setModLoading(true);
+    setModError(null);
+
+    fetch("http://127.0.0.1:8000/modify-recipe", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        recipe: selectedRecipe,
+        request: modText.trim(),
+      }),
+    })
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error("Failed to modify recipe. Please try again.");
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (data.status === "success" && data.recipe) {
+          setSelectedRecipe(data.recipe);
+          setModText("");
+        } else {
+          throw new Error("Failed to modify recipe.");
+        }
+      })
+      .catch((err) => {
+        setModError(err.message || "Failed to modify recipe. Please try again.");
+      })
+      .finally(() => {
+        setModLoading(false);
+      });
   };
 
   const handleModeChange = (key) => {
@@ -384,6 +574,18 @@ export default function Recipe() {
   const handleBackToSearch = () => {
     setPhase("search");
     setRecipe(null);
+  };
+
+  const handleStartRecipe = () => {
+    if (!selectedRecipe) return;
+    const steps = parseSteps(selectedRecipe.content);
+    setRecipe({
+      name: selectedRecipe.title,
+      prepTime: selectedRecipe.prep_time,
+      ingredients: selectedRecipe.ingredients,
+      steps,
+    });
+    setPhase("cooking");
   };
 
   if (phase === "cooking" && recipe) {
@@ -456,58 +658,189 @@ export default function Recipe() {
 
         {phase === "search" && (
           <>
-            <div className="flex flex-col items-center gap-4 py-2">
-              <div className="relative h-[88px] w-[88px]">
-                <div className="mic-ring" style={{ opacity: listening ? 0.55 : 0.28 }} />
-                <div className="mic-ring" style={{ opacity: listening ? 0.55 : 0.18 }} />
-                <div className="mic-ring" style={{ opacity: listening ? 0.55 : 0.1 }} />
-
-                <button
-                  type="button"
-                  onClick={() => setListening((l) => !l)}
-                  className={`relative flex h-[88px] w-[88px] shrink-0 items-center justify-center rounded-full border-none transition-[background,transform] outline-none hover:scale-105 hover:bg-[#5a7840] ${
-                    listening
-                      ? "animate-[mic-throb_0.8s_ease-in-out_infinite] bg-cm-danger hover:bg-cm-danger"
-                      : "bg-cm-olive"
-                  }`}
-                >
-                  {listening ? (
-                    <WaveForm active />
-                  ) : (
-                    <Mic className="size-7 shrink-0 text-[#f0ede0]" strokeWidth={1.8} />
-                  )}
-                </button>
+            {error && (
+              <div className="rounded-[20px] border-[1.5px] border-red-200 bg-red-50 p-4 text-center">
+                <p className="font-sans text-sm font-medium text-red-800">{error}</p>
               </div>
+            )}
 
-              <p
-                className={`font-sans text-sm font-light transition-colors ${
-                  listening ? "text-cm-danger" : "text-[#9a9282]"
-                }`}
-              >
-                {listening ? "Listening… tap to stop" : "Tap to speak"}
-              </p>
-            </div>
+            {(currentMode === "dish" || currentMode === "ingredients" || currentMode === "quick") && recipes !== null ? (
+              selectedRecipe ? (
+                <div className="animate-slide-in space-y-4 rounded-[20px] border-[1.5px] border-cm-card-border bg-cm-card p-6">
+                  <div className="flex items-center justify-between border-b border-[#d8d2bc]/80 pb-3">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedRecipe(null)}
+                      className="inline-flex items-center gap-1 font-sans text-xs font-semibold text-[#789a56] hover:text-[#5a7840] transition-colors"
+                    >
+                      <ChevronLeft className="size-4 shrink-0" strokeWidth={2} />
+                      Back to results
+                    </button>
+                    <span className="rounded-full bg-[#d4dfc4]/55 px-2.5 py-0.5 font-sans text-[11px] font-medium text-cm-olive-muted uppercase">
+                      {selectedRecipe.diet}
+                    </span>
+                  </div>
 
-            <div className="space-y-3">
-              <p className="text-center font-sans text-xs font-medium tracking-wide text-[#9a9282] uppercase">
-                Try one of these
-              </p>
-              <div className="flex flex-wrap justify-center gap-2">
-                {cfg.suggestions.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => {
-                      setText(s);
-                      setTimeout(() => inputRef.current?.focus(), 50);
-                    }}
-                    className="inline-flex items-center rounded-full border-[1.5px] border-[#c8c2a8] bg-[#edeadb] px-4 py-2 font-sans text-sm text-[#5a5648] transition-[background,border-color,transform] hover:-translate-y-0.5 hover:border-[#a8a28a] hover:bg-[#d8d4c0]"
+                  <div className="space-y-1">
+                    <div className="flex items-start justify-between">
+                      <h2 className="font-display text-2xl font-bold text-[#2e3818]">
+                        {selectedRecipe.title}
+                      </h2>
+                      <button
+                        type="button"
+                        onClick={handleStartRecipe}
+                        className="inline-flex items-center rounded-full border-[1.5px] border-[#5a7040] bg-cm-olive-dark px-4 py-1.5 font-sans text-xs font-semibold text-[#f0ede0] hover:bg-[#6a8050] transition-colors whitespace-nowrap ml-4"
+                      >
+                        Start Recipe
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs font-light text-[#7a7462]">
+                      <span>Cuisine: <strong className="font-medium text-[#5a5648]">{selectedRecipe.cuisine}</strong></span>
+                      <span>·</span>
+                      <span>Prep Time: <strong className="font-medium text-[#5a5648]">{selectedRecipe.prep_time} mins</strong></span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h4 className="font-sans text-[10.5px] font-medium tracking-wide text-[#9a9078] uppercase">
+                      Ingredients
+                    </h4>
+                    <ul className="list-disc pl-4 space-y-1">
+                      {selectedRecipe.ingredients.map((ing, idx) => (
+                        <li key={idx} className="font-sans text-xs text-[#58523e]">
+                          {ing}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="space-y-2 border-t border-[#d8d2bc]/80 pt-4">
+                    <h4 className="font-sans text-[10.5px] font-medium tracking-wide text-[#9a9078] uppercase">
+                      Instructions
+                    </h4>
+                    <ol className="list-decimal pl-4 space-y-2.5">
+                      {parseSteps(selectedRecipe.content).map((step, idx) => (
+                        <li key={idx} className="font-sans text-xs leading-relaxed text-[#58523e]">
+                          {step}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+
+                  {/* Modification Chat Input */}
+                  <div className="space-y-2 border-t border-[#d8d2bc]/80 pt-4">
+                    <h4 className="font-sans text-[10.5px] font-medium tracking-wide text-[#9a9078] uppercase">
+                      Request Modifications
+                    </h4>
+                    {modError && (
+                      <p className="font-sans text-xs font-medium text-red-800 bg-red-50 p-2 rounded-lg border border-red-100">
+                        {modError}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-full border-[1.5px] border-[#c8c2a8] bg-[#edead9] py-1 pl-3 pr-1">
+                        <MessageCircle className="size-3.5 shrink-0 text-[#789a56]" strokeWidth={1.7} />
+                        <input
+                          type="text"
+                          value={modText}
+                          onChange={(e) => setModText(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && handleModifyRecipe()}
+                          placeholder={modLoading ? "Modifying recipe..." : "Ask to swap ingredients, scale, etc..."}
+                          disabled={modLoading}
+                          className="min-w-0 flex-1 border-none bg-transparent py-1.5 font-sans text-[12.5px] text-[#2c2818] outline-none placeholder:font-light placeholder:text-[#9a9078] disabled:opacity-60"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleModifyRecipe}
+                          disabled={!modText.trim() || modLoading}
+                          aria-label="Send modification request"
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-none bg-cm-olive transition-[background,transform] enabled:hover:bg-[#5a7840] disabled:bg-[#c8c2ae]"
+                        >
+                          <Send className="size-3.5 shrink-0 text-[#f0ede0]" strokeWidth={1.7} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : recipes.length > 0 ? (
+                <div className="space-y-3">
+                  <h3 className="text-center font-sans text-xs font-medium tracking-wide text-[#9a9282] uppercase">
+                    Select a Recipe
+                  </h3>
+                  <div className="flex flex-col gap-2">
+                    {recipes.map((r, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => setSelectedRecipe(r)}
+                        className="w-full text-left rounded-xl border-[1.5px] border-[#c8c2a8] bg-[#edeadb] px-4 py-3 font-sans text-sm text-[#5a5648] hover:border-[#a8a28a] hover:bg-[#d8d4c0] transition-colors"
+                      >
+                        {r.title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="py-8 text-center">
+                  <p className="font-sans text-sm text-[#9a9282]">No recipe found</p>
+                </div>
+              )
+            ) : (
+              <>
+                <div className="flex flex-col items-center gap-4 py-2">
+                  <div className="relative h-[88px] w-[88px]">
+                    <div className="mic-ring" style={{ opacity: listening ? 0.55 : 0.28 }} />
+                    <div className="mic-ring" style={{ opacity: listening ? 0.55 : 0.18 }} />
+                    <div className="mic-ring" style={{ opacity: listening ? 0.55 : 0.1 }} />
+
+                    <button
+                      type="button"
+                      onClick={() => setListening((l) => !l)}
+                      className={`relative flex h-[88px] w-[88px] shrink-0 items-center justify-center rounded-full border-none transition-[background,transform] outline-none hover:scale-105 hover:bg-[#5a7840] ${
+                        listening
+                          ? "animate-[mic-throb_0.8s_ease-in-out_infinite] bg-cm-danger hover:bg-cm-danger"
+                          : "bg-cm-olive"
+                      }`}
+                    >
+                      {listening ? (
+                        <WaveForm active />
+                      ) : (
+                        <Mic className="size-7 shrink-0 text-[#f0ede0]" strokeWidth={1.8} />
+                      )}
+                    </button>
+                  </div>
+
+                  <p
+                    className={`font-sans text-sm font-light transition-colors ${
+                      listening ? "text-cm-danger" : "text-[#9a9282]"
+                    }`}
                   >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
+                    {listening ? "Listening… tap to stop" : "Tap to speak"}
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-center font-sans text-xs font-medium tracking-wide text-[#9a9282] uppercase">
+                    Try one of these
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {cfg.suggestions.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => {
+                          setText(s);
+                          setTimeout(() => inputRef.current?.focus(), 50);
+                        }}
+                        className="inline-flex items-center rounded-full border-[1.5px] border-[#c8c2a8] bg-[#edeadb] px-4 py-2 font-sans text-sm text-[#5a5648] transition-[background,border-color,transform] hover:-translate-y-0.5 hover:border-[#a8a28a] hover:bg-[#d8d4c0]"
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </>
         )}
 

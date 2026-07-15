@@ -3,6 +3,9 @@ from langchain_core.documents import Document
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 
+import os
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 
 def format_recipe(r):
     """Convert structured recipe → text for embedding"""
@@ -24,8 +27,11 @@ Instructions:
 # for i in r['ingredients']:
 #     list_item = "- " + i
 
-def load_jsonl(file_path="recipes.jsonl"):
+def load_jsonl(file_path=None):
     """Load JSONL and convert to LangChain Documents"""
+
+    if file_path is None:
+        file_path = os.path.join(BASE_DIR, "recipes.jsonl")
 
     print(f"Loading recipes from {file_path}...")
 
@@ -57,8 +63,11 @@ def load_jsonl(file_path="recipes.jsonl"):
     return documents
 
 
-def create_vector_store(documents, persist_directory="db/chroma_db"):
+def create_vector_store(documents, persist_directory=None):
     """Create and persist ChromaDB vector store"""
+
+    if persist_directory is None:
+        persist_directory = os.path.join(BASE_DIR, "db", "chroma_db")
 
     print("Creating embeddings and storing in ChromaDB...")
 
@@ -74,9 +83,8 @@ def create_vector_store(documents, persist_directory="db/chroma_db"):
     print(f"Vector store saved to {persist_directory}")
     return vectorstore
 
-
 def main():
-    docs = load_jsonl("recipes.jsonl")
+    docs = load_jsonl()
     vectorstore = create_vector_store(docs)
 
 
