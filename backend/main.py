@@ -9,7 +9,16 @@ from rag.retrieval_pipeline import (
     answer_step_question_llm,
 )
 
+from backend.auth import router as auth_router
+
+from backend.database import engine, Base
+import backend.models
+
+Base.metadata.create_all(bind=engine)
+
 app = FastAPI()
+
+app.include_router(auth_router)
 
 app.add_middleware(
     CORSMiddleware,
