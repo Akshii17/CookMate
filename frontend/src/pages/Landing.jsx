@@ -41,7 +41,6 @@ export default function Landing() {
   const handleAuthSuccess = (type) => {
     closeAuth();
     navigate("/home");
-    toast.success(type === "login" ? "Welcome back!" : "Account created — welcome to CookMate!");
   };
 
   return (

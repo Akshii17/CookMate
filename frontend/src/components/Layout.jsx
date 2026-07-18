@@ -2,6 +2,9 @@ import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Home, Heart, User, LogOut, Menu, Leaf, ChevronLeft } from "lucide-react";
+import { googleLogout } from "@react-oauth/google";
+import { useAuth } from "../context/AuthContext.jsx";
+
 
 const navItems = [
   { label: "Home", to: "/home", icon: Home },
@@ -9,18 +12,17 @@ const navItems = [
   { label: "Profile", to: "/profile", icon: User },
 ];
 
+
 function NavButton({ to, icon: Icon, label, collapsed }) {
   return (
     <NavLink
       to={to}
       end={to === "/home"}
       className={({ isActive }) =>
-        `mb-0.5 flex w-full items-center border-none bg-transparent py-2.5 font-sans text-[13px] transition-colors ${
-          collapsed ? "justify-center px-2" : "gap-2.5 px-3.5 text-left"
-        } ${
-          isActive
-            ? "font-medium text-[#2a3218]"
-            : "font-normal text-[#8a8470] hover:text-[#4a5038]"
+        `mb-0.5 flex w-full items-center border-none bg-transparent py-2.5 font-sans text-[13px] transition-colors ${collapsed ? "justify-center px-2" : "gap-2.5 px-3.5 text-left"
+        } ${isActive
+          ? "font-medium text-[#2a3218]"
+          : "font-normal text-[#8a8470] hover:text-[#4a5038]"
         }`
       }
     >
@@ -37,20 +39,24 @@ function NavButton({ to, icon: Icon, label, collapsed }) {
 export default function Layout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const navigate = useNavigate();
+  const { logout } = useAuth();
 
   const toggleSidebar = () => setSidebarCollapsed((prev) => !prev);
 
   const handleLogout = () => {
-    navigate("/");
+    googleLogout();
+    logout();
+
     toast.success("Logged out successfully");
+
+    navigate("/", { replace: true });
   };
 
   return (
     <div className="flex min-h-screen bg-cm-bg font-sans">
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-20 flex flex-col border-r-[1.5px] border-[#c4bea8] bg-cm-sidebar pt-7 transition-[width,padding] duration-300 ease-in-out ${
-          sidebarCollapsed ? "w-16 px-2" : "w-48 px-4"
-        }`}
+        className={`fixed top-0 bottom-0 left-0 z-20 flex flex-col border-r-[1.5px] border-[#c4bea8] bg-cm-sidebar pt-7 transition-[width,padding] duration-300 ease-in-out ${sidebarCollapsed ? "w-16 px-2" : "w-48 px-4"
+          }`}
       >
         <div
           className={`mb-8 flex shrink-0 ${sidebarCollapsed ? "justify-center" : "items-center justify-between gap-2"}`}
@@ -89,9 +95,8 @@ export default function Layout() {
         <div className="flex-1" />
 
         <div
-          className={`mt-auto shrink-0 bg-[#c8d4a8] pt-3 pb-7 ${
-            sidebarCollapsed ? "-mx-2 px-2" : "-mx-4 px-4"
-          }`}
+          className={`mt-auto shrink-0 bg-[#c8d4a8] pt-3 pb-7 ${sidebarCollapsed ? "-mx-2 px-2" : "-mx-4 px-4"
+            }`}
         >
           <NavLink
             to="/profile"
@@ -110,9 +115,8 @@ export default function Layout() {
             type="button"
             onClick={handleLogout}
             aria-label="Log out"
-            className={`flex w-full items-center border-none bg-transparent py-2 font-sans text-[13px] text-[#6a6454] transition-colors hover:text-[#2a3218] ${
-              sidebarCollapsed ? "justify-center px-0" : "gap-2.5 px-1 text-left"
-            }`}
+            className={`flex w-full items-center border-none bg-transparent py-2 font-sans text-[13px] text-[#6a6454] transition-colors hover:text-[#2a3218] ${sidebarCollapsed ? "justify-center px-0" : "gap-2.5 px-1 text-left"
+              }`}
           >
             <LogOut className="size-[18px] shrink-0" strokeWidth={1.7} />
             {!sidebarCollapsed && "Logout"}
@@ -121,9 +125,8 @@ export default function Layout() {
       </aside>
 
       <div
-        className={`relative flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] duration-300 ease-in-out ${
-          sidebarCollapsed ? "pl-16" : "pl-48"
-        }`}
+        className={`relative flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] duration-300 ease-in-out ${sidebarCollapsed ? "pl-16" : "pl-48"
+          }`}
       >
         <main className="flex-1 overflow-y-auto">
           <Outlet />

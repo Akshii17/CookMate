@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { X, Eye, EyeClosed } from "lucide-react";
+import { X, Eye, EyeClosed, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { GoogleLogin } from "@react-oauth/google";
+import { useAuth } from "../context/AuthContext.jsx";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const inputClass =
@@ -9,12 +10,15 @@ const inputClass =
 
 export function AuthModal({ mode, onClose, onSwitchMode, onSuccess }) {
   const isLogin = mode === "login";
+  const { login, signup, googleLogin } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+
 
   useEffect(() => {
     const onKey = (e) => {
@@ -38,7 +42,7 @@ export function AuthModal({ mode, onClose, onSwitchMode, onSuccess }) {
     setShowConfirmPassword(false);
   }, [mode]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!isLogin && !name.trim()) {
@@ -69,7 +73,23 @@ export function AuthModal({ mode, onClose, onSwitchMode, onSuccess }) {
       return;
     }
 
-    onSuccess(isLogin ? "login" : "signup");
+    try {
+      setLoading(true);
+      if (isLogin) {
+        await login(userEmail, password);
+        toast.success("Logged in!");
+      } else {
+        await signup(name.trim(), userEmail, password);
+        toast.success("Account created successfully!");
+      }
+      onSuccess?.();
+      onClose();
+    }
+    catch (error) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -82,14 +102,18 @@ export function AuthModal({ mode, onClose, onSwitchMode, onSuccess }) {
       <button
         type="button"
         className="absolute inset-0 bg-[#2c2818]/40 backdrop-blur-[2px]"
-        onClick={onClose}
+        onClick={() => {
+          if (!loading) onClose();
+        }}
         aria-label="Close dialog"
       />
 
       <div className="animate-slide-in relative w-full max-w-md rounded-[20px] border-[1.5px] border-cm-card-border bg-cm-card p-6 shadow-[0_24px_64px_rgba(70,62,40,0.2)] sm:p-8">
         <button
           type="button"
-          onClick={onClose}
+          onClick={() => {
+            if (!loading) onClose();
+          }}
           className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full border-[1.5px] border-[#c4be98] bg-[#edead9] text-[#6a6454] transition-colors hover:bg-[#d8d4c0]"
           aria-label="Close"
         >
@@ -121,6 +145,7 @@ export function AuthModal({ mode, onClose, onSwitchMode, onSuccess }) {
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Your name"
                 className={inputClass}
+                disabled={loading}
               />
             </div>
           )}
@@ -137,6 +162,7 @@ export function AuthModal({ mode, onClose, onSwitchMode, onSuccess }) {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
               className={inputClass}
+              disabled={loading}
             />
           </div>
 
@@ -153,6 +179,7 @@ export function AuthModal({ mode, onClose, onSwitchMode, onSuccess }) {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
                 className={inputClass}
+                disabled={loading}
               />
 
               <button
@@ -182,6 +209,7 @@ export function AuthModal({ mode, onClose, onSwitchMode, onSuccess }) {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Confirm your password"
                   className={inputClass}
+                  disabled={loading}
                 />
 
                 <button
@@ -197,9 +225,24 @@ export function AuthModal({ mode, onClose, onSwitchMode, onSuccess }) {
 
           <button
             type="submit"
+            disabled={loading}
             className="mt-2 w-full rounded-full border-[1.5px] border-[#5a7040] bg-cm-olive-dark py-3 font-sans text-sm font-medium text-[#f0ede0] transition-colors hover:bg-[#6a8050]"
           >
-            {isLogin ? "Log in" : "Sign up"}
+            {
+              loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2
+                    className="size-4 animate-spin"
+                    strokeWidth={1.7}
+                  />
+                  Please wait...
+                </span>
+              ) : isLogin ? (
+                "Log in"
+              ) : (
+                "Sign up"
+              )
+            }
           </button>
         </form>
 
@@ -216,11 +259,30 @@ export function AuthModal({ mode, onClose, onSwitchMode, onSuccess }) {
             size="large"
             text="signin_with"
             width="330"
-            onSuccess={(credentialResponse) => {
-              const token = credentialResponse.credential;
+            onSuccess={async (credentialResponse) => {
+              try {
 
-              console.log(token); //replace this later with await googleLogin(token);
-              toast.success("Google login successful!");
+                setLoading(true);
+
+                await googleLogin(
+                  credentialResponse.credential
+                );
+
+                toast.success("Logged in successfully!");
+
+                onSuccess?.();
+
+                onClose();
+
+              } catch (err) {
+
+                toast.error(err.message);
+
+              } finally {
+
+                setLoading(false);
+
+              }
             }}
             onError={() => {
               toast.error("Google login failed");
@@ -234,7 +296,7 @@ export function AuthModal({ mode, onClose, onSwitchMode, onSuccess }) {
               Don't have an account?{" "}
               <button
                 type="button"
-                onClick={() => onSwitchMode("signup")}
+                onClick={() => !loading && onSwitchMode("signup")}
                 className="font-medium text-cm-olive-muted underline-offset-2 hover:underline"
               >
                 Sign up
@@ -245,7 +307,7 @@ export function AuthModal({ mode, onClose, onSwitchMode, onSuccess }) {
               Already have an account?{" "}
               <button
                 type="button"
-                onClick={() => onSwitchMode("login")}
+                onClick={() => !loading && onSwitchMode("login")}
                 className="font-medium text-cm-olive-muted underline-offset-2 hover:underline"
               >
                 Log in
