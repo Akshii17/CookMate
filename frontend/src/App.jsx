@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import Layout from "./components/Layout";
 import Landing from "./pages/Landing";
@@ -6,8 +6,18 @@ import Home from "./pages/Home";
 import Recipe from "./pages/Recipe";
 import Profile from "./pages/Profile";
 import Favourites from "./pages/Favourites";
+import { useAuth } from "./context/AuthContext";
+import { Loader2 } from "lucide-react";
 
 export default function App() {
+  const { isAuthenticated, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <Loader2 className="animate-spin" />
+      </div>
+    );
+  }
   return (
     <BrowserRouter>
       <Toaster
@@ -35,10 +45,10 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route element={<Layout />}>
-          <Route path="home" element={<Home />} />
-          <Route path="recipe/:mode" element={<Recipe />} />
-          <Route path="favourites" element={<Favourites />} />
-          <Route path="profile" element={<Profile />} />
+          <Route path="home" element={isAuthenticated ? <Home /> : <Navigate to="/" replace />} />
+          <Route path="recipe/:mode" element={isAuthenticated ? <Recipe /> : <Navigate to="/" replace />} />
+          <Route path="favourites" element={isAuthenticated ? <Favourites /> : <Navigate to="/" replace />} />
+          <Route path="profile" element={isAuthenticated ? <Profile /> : <Navigate to="/" replace />} />
         </Route>
       </Routes>
     </BrowserRouter>
