@@ -1,28 +1,43 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import { LayoutGrid, List, Search, Heart } from "lucide-react";
 import { EmptyPlateArt, ART_MAP } from "../components/Arts";
 import { PageShell, PageHero } from "../components/PageShell";
+import { useAuth } from "../context/AuthContext";
+import { getFavorites, removeFavorite } from "../services/favoritesService";
 
-const RECIPES = [
-  { id: 1, title: "Spaghetti Bolognese", badge: "Pasta", desc: "Rich slow-cooked tomato ragu with herbs & parmesan. Pure comfort.", time: "40 min", tag: "Italian", ghost: "#c8b468", art: "pasta" },
-  { id: 2, title: "Green Buddha Bowl", badge: "Vegan", desc: "Roasted veggies, chickpeas & tahini over fluffy quinoa.", time: "25 min", tag: "Healthy", ghost: "#60aa50", art: "bowl" },
-  { id: 3, title: "Lemon Herb Salmon", badge: "Seafood", desc: "Pan-seared fillet with garlic butter, lemon zest & fresh dill.", time: "18 min", tag: "Quick", ghost: "#d4b060", art: "fish" },
-  { id: 4, title: "Shakshuka", badge: "Breakfast", desc: "Poached eggs in spiced tomato pepper sauce. A morning ritual.", time: "20 min", tag: "Middle Eastern", ghost: "#c06040", art: "eggs" },
-  { id: 5, title: "Mango Chia Pudding", badge: "Dessert", desc: "Creamy overnight chia with ripe mango & coconut milk.", time: "5 min", tag: "Sweet", ghost: "#e0a830", art: "pudding" },
-  { id: 6, title: "Mushroom Risotto", badge: "Vegetarian", desc: "Silky arborio with wild mushrooms, white wine & parmesan.", time: "35 min", tag: "Italian", ghost: "#a87840", art: "risotto" },
-];
+const ART_KEYS = Object.keys(ART_MAP);
 
+function parseFirstStep(content) {
+  if (!content) return "";
+  const index = content.indexOf("Instructions:");
+  const after = index === -1 ? content : content.slice(index + "Instructions:".length);
+  const step = after
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+  if (!step) return "";
+  return step.replace(/^\d+\.\s*/, "");
+}
 
-
-function parsePrepMinutes(timeStr) {
-  const n = parseInt(timeStr, 10);
-  return Number.isNaN(n) ? 50 : n;
+function apiRecipeToCard(recipe, index) {
+  return {
+    id: recipe.id,
+    title: recipe.title,
+    badge: recipe.diet || "Recipe",
+    desc: parseFirstStep(recipe.content) || recipe.title,
+    time: `${recipe.prep_time} min`,
+    tag: recipe.cuisine || "Saved",
+    ghost: "#c8b468",
+    art: ART_KEYS[index % ART_KEYS.length],
+    raw: recipe,
+  };
 }
 
 function RecipeCard({ recipe, isList, delay, onRemove, onOpen }) {
   const [popping, setPopping] = useState(false);
-  const Art = ART_MAP[recipe.art];
+  const Art = ART_MAP[recipe.art] || ART_MAP.pasta;
 
   const handleRemove = (e) => {
     e.stopPropagation();
@@ -115,38 +130,62 @@ function RecipeCard({ recipe, isList, delay, onRemove, onOpen }) {
 
 export default function Favourites() {
   const navigate = useNavigate();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [viewMode, setViewMode] = useState("grid");
   const [activeTab, setActiveTab] = useState("All");
   const [search, setSearch] = useState("");
-  const [favorites, setFavorites] = useState(new Set(RECIPES.map((r) => r.id)));
+  const [recipes, setRecipes] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!isAuthenticated) {
+      setRecipes([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    getFavorites()
+      .then((data) => {
+        setRecipes((data.recipes || []).map(apiRecipeToCard));
+      })
+      .catch((err) => {
+        toast.error(err.message || "Failed to load favorites");
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [isAuthenticated, authLoading]);
 
   const handleRemove = (id) => {
-    setFavorites((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
+    removeFavorite(id)
+      .then(() => {
+        setRecipes((prev) => prev.filter((recipe) => recipe.id !== id));
+      })
+      .catch((err) => {
+        toast.error(err.message || "Failed to remove favorite");
+      });
   };
 
   const handleOpenRecipe = (recipe) => {
     navigate("/recipe/dish", {
       state: {
         openRecipe: true,
-        recipeTitle: recipe.title,
-        prepTime: parsePrepMinutes(recipe.time),
+        savedRecipe: recipe.raw,
         favorited: true,
       },
     });
   };
 
-  const filtered = RECIPES.filter((r) => favorites.has(r.id))
+  const filtered = recipes
     .filter((r) => activeTab === "All" || r.tag === activeTab)
     .filter((r) => {
       const q = search.toLowerCase();
       return !q || r.title.toLowerCase().includes(q) || r.desc.toLowerCase().includes(q);
     });
 
-  const isEmpty = filtered.length === 0;
+  const isEmpty = !loading && filtered.length === 0;
   const isSearchOrFilter = search.trim() || activeTab !== "All";
 
   return (
@@ -172,7 +211,6 @@ export default function Favourites() {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        
         <div className="flex shrink-0 gap-2">
           <button
             type="button"
@@ -206,16 +244,26 @@ export default function Favourites() {
         </div>
       )}
 
-      {isEmpty ? (
+      {loading ? (
+        <div className="py-14 text-center font-sans text-sm font-light text-[#9a9282]">
+          Loading your favorites…
+        </div>
+      ) : isEmpty ? (
         <div className="flex flex-col items-center justify-center rounded-[20px] border-[1.5px] border-cm-card-border bg-cm-card px-6 py-14 text-center">
           <EmptyPlateArt />
           <h2 className="mt-6 mb-3 font-display text-xl font-bold text-[#282c18]">
-            {isSearchOrFilter ? "No matches found." : "No favorites yet."}
+            {!isAuthenticated
+              ? "Sign in to save favorites."
+              : isSearchOrFilter
+                ? "No matches found."
+                : "No favorites yet."}
           </h2>
           <p className="max-w-sm font-sans text-sm font-light leading-relaxed text-[#7a7060]">
-            {isSearchOrFilter
-              ? "Try a different search or filter to find your saved recipes."
-              : "Start saving recipes you love and they'll appear here!"}
+            {!isAuthenticated
+              ? "Log in and tap the heart while cooking to save recipes here."
+              : isSearchOrFilter
+                ? "Try a different search or filter to find your saved recipes."
+                : "Start saving recipes you love and they'll appear here!"}
           </p>
         </div>
       ) : (

@@ -82,32 +82,41 @@ import {
     };
   
     const logout = () => {
-  
+
       setUser(null);
       setToken(null);
       setIsAuthenticated(false);
-  
+
       localStorage.removeItem("token");
       localStorage.removeItem("user");
     };
-  
+
+    const updateUser = (updatedUser) => {
+      setUser((prev) => {
+        const next = { ...prev, ...updatedUser };
+        localStorage.setItem("user", JSON.stringify(next));
+        return next;
+      });
+    };
+
     return (
-  
+
       <AuthContext.Provider
         value={{
-  
+
           user,
           token,
-  
+
           isAuthenticated,
-  
+
           loading,
-  
+
           login,
           signup,
           googleLogin,
           logout,
-  
+          updateUser,
+
         }}
       >
   

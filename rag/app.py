@@ -1,7 +1,7 @@
 from retrieval_pipeline import run_rag, show_options_and_select, show_options_and_select2, print_recipe, generate_recipe_llm, contains_allergens
 
 last_recipe = None
-user_allergies = ["chicken"]
+user_allergies = []
 
 while True:
     user_query = input("\nYou: ")
@@ -22,7 +22,7 @@ while True:
 
         filtered_docs, all_docs = run_rag(user_query)
 
-        # 🥇 CASE 1: SAFE RECIPES FOUND
+        #  CASE 1: SAFE RECIPES FOUND
         if filtered_docs:
             selected_doc = show_options_and_select(filtered_docs)
 
@@ -72,7 +72,7 @@ while True:
                 print("\n--- Recipe ---\n")
                 print_recipe(selected_doc)
 
-        # 🤖 CASE 2: NOTHING USEFUL → GENERATE FROM SIMILAR DOCUMENTS
+        # CASE 2: NOTHING USEFUL → GENERATE FROM SIMILAR DOCUMENTS
         elif all_docs:
             print("\n--- No match → showing options ---\n")
 
@@ -207,7 +207,7 @@ Steps:
 
 
     # -----------------------------
-    # 🤖 MODIFY MODE
+    #  MODIFY MODE
     # -----------------------------
     else:
         print("\n--- Modifying recipe ---\n")

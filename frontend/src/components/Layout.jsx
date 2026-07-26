@@ -39,7 +39,8 @@ function NavButton({ to, icon: Icon, label, collapsed }) {
 export default function Layout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
+  const profileInitial = user?.name?.charAt(0)?.toUpperCase() || "A";
 
   const toggleSidebar = () => setSidebarCollapsed((prev) => !prev);
 
@@ -103,11 +104,21 @@ export default function Layout() {
             aria-label="Your profile"
             className={`mb-2 flex w-full items-center ${sidebarCollapsed ? "justify-center" : "gap-2.5 px-1"}`}
           >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cm-olive text-sm font-medium text-[#eef0e2]">
-              A
-            </span>
+            {user?.profile_picture ? (
+              <img
+                src={user.profile_picture}
+                alt=""
+                className="h-9 w-9 shrink-0 rounded-full border-[1.5px] border-[#9db07e] object-cover"
+              />
+            ) : (
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cm-olive text-sm font-medium text-[#eef0e2]">
+                {profileInitial}
+              </span>
+            )}
             {!sidebarCollapsed && (
-              <span className="font-sans text-[13px] font-medium text-[#2a3218]">Account</span>
+              <span className="font-sans text-[13px] font-medium text-[#2a3218]">
+                {user?.name?.split(" ")[0] || "Account"}
+              </span>
             )}
           </NavLink>
 

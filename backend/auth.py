@@ -5,6 +5,7 @@ from typing import Generator
 from backend.database import SessionLocal
 from backend.models import User
 from backend.schema import UserSignup, UserLogin, UserResponse, GoogleLogin, Token
+from backend.storage import resolve_profile_picture_url
 from jose import jwt, JWTError
 
 from google.oauth2 import id_token
@@ -62,6 +63,14 @@ def create_access_token(data: dict):
     )
 
     return encoded_jwt
+
+def user_to_response(user: User) -> dict:
+    return {
+        "id": user.id,
+        "name": user.name,
+        "email": user.email,
+        "profile_picture": resolve_profile_picture_url(user.profile_picture),
+    }
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
@@ -183,7 +192,7 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "user": existing_user
+        "user": user_to_response(existing_user),
     }
 
 @router.post("/google", response_model=Token)
@@ -229,7 +238,7 @@ def google_login(
         return {
             "access_token": access_token,
             "token_type": "bearer",
-            "user": existing_user
+            "user": user_to_response(existing_user),
         }
 
     # First-time Google user → create account
@@ -254,5 +263,5 @@ def google_login(
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "user": new_user
+        "user": user_to_response(new_user),
     }

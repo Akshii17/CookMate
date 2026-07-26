@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
+import toast from "react-hot-toast";
 
 import {
   Send,
@@ -14,6 +15,8 @@ import {
   X,
 } from "lucide-react";
 import { PageShell, PageChip, PageHero } from "../components/PageShell";
+import { useAuth } from "../context/AuthContext";
+import { addFavorite, removeFavorite } from "../services/favoritesService";
 
 const MODE_CONFIG = {
   dish: {
@@ -30,9 +33,9 @@ const MODE_CONFIG = {
   },
   quick: {
     label: "Minute Meals",
-    placeholder: "Enter time or a quick idea...",
-    hint: "e.g. 15 min, something with noodles, easy breakfast",
-    suggestions: ["15-min dinner", "5-ingredient meal", "No-cook lunch", "Quick stir fry"],
+    placeholder: "e.g. 30 minute pasta",
+    hint: "Use the format: <minutes> minute <dish> — e.g. 30 minute pasta, 15 minute soup",
+    suggestions: ["15 minute soup", "30 minute pasta", "20 minute stir fry", "45 minute noodles"],
   },
 };
 
@@ -46,10 +49,19 @@ function WaveForm({ active }) {
   );
 }
 
-function RecipeStepView({ recipe, query, onBack, initialFavorited = false }) {
+function RecipeStepView({
+  recipe,
+  query,
+  onBack,
+  initialFavorited = false,
+  onRecipeIdChange,
+}) {
+  const { isAuthenticated } = useAuth();
   const [stepIndex, setStepIndex] = useState(0);
   const [listening, setListening] = useState(false);
   const [favorited, setFavorited] = useState(initialFavorited);
+  const [recipeId, setRecipeId] = useState(recipe.id ?? null);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [heartPop, setHeartPop] = useState(false);
   const [queryText, setQueryText] = useState("");
   const [queryReply, setQueryReply] = useState(null);
@@ -180,10 +192,39 @@ function RecipeStepView({ recipe, query, onBack, initialFavorited = false }) {
     return () => recognition.abort();
   }, [listening, handleVoiceCommand]);
 
-  const toggleFavorite = () => {
-    setFavorited((f) => !f);
-    setHeartPop(true);
-    setTimeout(() => setHeartPop(false), 380);
+  const toggleFavorite = async () => {
+    if (!isAuthenticated) {
+      toast.error("Sign in to save favorites");
+      return;
+    }
+    if (favoriteLoading) return;
+
+    setFavoriteLoading(true);
+    try {
+      if (favorited) {
+        if (recipeId != null) {
+          await removeFavorite(recipeId);
+        }
+        setFavorited(false);
+        toast.success("Removed from favorites");
+      } else {
+        const data = await addFavorite(
+          recipeId != null
+            ? { recipeId }
+            : { recipe: recipe.rawRecipe }
+        );
+        setRecipeId(data.recipe_id);
+        onRecipeIdChange?.(data.recipe_id);
+        setFavorited(true);
+        toast.success("Saved to favorites");
+      }
+      setHeartPop(true);
+      setTimeout(() => setHeartPop(false), 380);
+    } catch (err) {
+      toast.error(err.message || "Could not update favorite");
+    } finally {
+      setFavoriteLoading(false);
+    }
   };
 
   const displayName = recipe.name.replace(/\s+Recipe$/i, "");
@@ -213,6 +254,7 @@ function RecipeStepView({ recipe, query, onBack, initialFavorited = false }) {
           <button
             type="button"
             onClick={toggleFavorite}
+            disabled={favoriteLoading}
             aria-label={favorited ? "Remove from favorites" : "Add to favorites"}
             className={`absolute top-0 right-0 flex h-10 w-10 items-center justify-center rounded-full border-[1.5px] transition-colors ${
               favorited
@@ -387,6 +429,18 @@ function parseSteps(content) {
     .map(step => step.replace(/^\d+\.\s*/, ""));
 }
 
+function backendRecipeToCookingRecipe(backendRecipe) {
+  return {
+    name: backendRecipe.title,
+    prepTime: backendRecipe.prep_time,
+    ingredients: backendRecipe.ingredients || [],
+    steps: parseSteps(backendRecipe.content),
+    id: backendRecipe.id ?? null,
+    source: backendRecipe.source ?? (backendRecipe.id != null ? "rag" : "llm"),
+    rawRecipe: backendRecipe,
+  };
+}
+
 export default function Recipe() {
   const { mode: modeParam } = useParams();
   const navigate = useNavigate();
@@ -395,15 +449,28 @@ export default function Recipe() {
 
   const navState = location.state;
   const openedFromSaved =
-    Boolean(navState?.openRecipe) && Boolean(navState?.recipeTitle);
-  const [text, setText] = useState(navState?.recipeTitle ?? "");
+    Boolean(navState?.openRecipe) &&
+    Boolean(navState?.savedRecipe || navState?.recipeTitle);
+  const [text, setText] = useState(
+    navState?.savedRecipe?.title ?? navState?.recipeTitle ?? ""
+  );
   const [listening, setListening] = useState(false);
   const [phase, setPhase] = useState(openedFromSaved ? "cooking" : "search");
-  const [recipe, setRecipe] = useState(
-    openedFromSaved
-      ? getDummyRecipe(navState.recipeTitle, navState.prepTime ?? 50)
-      : null
-  );
+  const [recipe, setRecipe] = useState(() => {
+    if (!openedFromSaved) return null;
+    if (navState?.savedRecipe) {
+      return backendRecipeToCookingRecipe(navState.savedRecipe);
+    }
+    return {
+      name: navState.recipeTitle,
+      prepTime: navState.prepTime ?? 50,
+      ingredients: [],
+      steps: [],
+      id: null,
+      source: "llm",
+      rawRecipe: null,
+    };
+  });
   const [initialFavorited] = useState(Boolean(navState?.favorited));
   const [recipes, setRecipes] = useState(null);
   const [selectedRecipe, setSelectedRecipe] = useState(null);
@@ -483,20 +550,32 @@ export default function Recipe() {
     setRecipes(null);
     setSelectedRecipe(null);
 
-    let max_prep_time;
     if (currentMode === "quick") {
-      let match = text.match(/^\s*(\d+)\s*$/);
-      if (!match) {
-        match = text.match(/\b(\d+)\s*(?:-?\s*min|minute|m\b)/i);
-      }
-      if (match) {
-        max_prep_time = parseInt(match[1], 10);
-      }
-    }
-
-    const body = { query: text };
-    if (max_prep_time !== undefined) {
-      body.max_prep_time = max_prep_time;
+      fetch("http://127.0.0.1:8000/minute-meals", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: text.trim(),
+        }),
+      })
+        .then(async (res) => {
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.detail || "Failed to fetch recipes. Please try again.");
+          }
+          return data;
+        })
+        .then((data) => {
+          setRecipes(data.recipes || []);
+          setPhase("search");
+        })
+        .catch((err) => {
+          setError(err.message || "Failed to fetch recipes. Please try again.");
+          setPhase("search");
+        });
+      return;
     }
 
     fetch("http://127.0.0.1:8000/get-recipe", {
@@ -504,7 +583,7 @@ export default function Recipe() {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ query: text }),
     })
       .then((res) => {
         if (!res.ok) {
@@ -578,14 +657,20 @@ export default function Recipe() {
 
   const handleStartRecipe = () => {
     if (!selectedRecipe) return;
-    const steps = parseSteps(selectedRecipe.content);
-    setRecipe({
-      name: selectedRecipe.title,
-      prepTime: selectedRecipe.prep_time,
-      ingredients: selectedRecipe.ingredients,
-      steps,
-    });
+    setRecipe(backendRecipeToCookingRecipe(selectedRecipe));
     setPhase("cooking");
+  };
+
+  const handleRecipeIdChange = (id) => {
+    setRecipe((prev) =>
+      prev
+        ? {
+            ...prev,
+            id,
+            rawRecipe: prev.rawRecipe ? { ...prev.rawRecipe, id } : prev.rawRecipe,
+          }
+        : prev
+    );
   };
 
   if (phase === "cooking" && recipe) {
@@ -597,6 +682,7 @@ export default function Recipe() {
             query={text}
             onBack={handleBackToSearch}
             initialFavorited={initialFavorited}
+            onRecipeIdChange={handleRecipeIdChange}
           />
         </PageShell>
       </div>
@@ -770,12 +856,17 @@ export default function Recipe() {
                   <div className="flex flex-col gap-2">
                     {recipes.map((r, index) => (
                       <button
-                        key={index}
+                        key={`${r.title}-${index}`}
                         type="button"
                         onClick={() => setSelectedRecipe(r)}
                         className="w-full text-left rounded-xl border-[1.5px] border-[#c8c2a8] bg-[#edeadb] px-4 py-3 font-sans text-sm text-[#5a5648] hover:border-[#a8a28a] hover:bg-[#d8d4c0] transition-colors"
                       >
-                        {r.title}
+                        <span className="block">{r.title}</span>
+                        {currentMode === "quick" && r.prep_time != null && (
+                          <span className="mt-0.5 block font-sans text-[11px] font-light text-[#8a8470]">
+                            {r.prep_time} min prep
+                          </span>
+                        )}
                       </button>
                     ))}
                   </div>

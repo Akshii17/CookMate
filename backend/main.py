@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -9,8 +9,11 @@ from rag.retrieval_pipeline import (
     modify_recipe_llm,
     answer_step_question_llm,
 )
+from rag.minute_meals_pipeline import retrieve_minute_meals
 
 from backend.auth import router as auth_router
+from backend.users import router as users_router
+from backend.favorites import router as favorites_router
 
 from backend.database import engine, Base
 import backend.models
@@ -28,6 +31,8 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(users_router)
+app.include_router(favorites_router)
 
 @app.get("/")
 def health_check():
@@ -52,15 +57,29 @@ class AskQuestionRequest(BaseModel):
     question: str
 
 
+class MinuteMealsRequest(BaseModel):
+    query: str
+
+
 def doc_to_dict(doc):
     """Convert a LangChain Document into a plain JSON-friendly dict"""
     return {
+        "id": doc.metadata.get("id"),
         "title": doc.metadata.get("title"),
         "prep_time": doc.metadata.get("prep_time"),
         "diet": doc.metadata.get("diet"),
         "cuisine": doc.metadata.get("cuisine"),
         "ingredients": doc.metadata.get("ingredients"),
         "content": doc.page_content,
+        "source": "rag",
+    }
+
+
+def llm_recipe_to_dict(recipe: dict) -> dict:
+    return {
+        **recipe,
+        "id": recipe.get("id"),
+        "source": "llm",
     }
 
 
@@ -78,12 +97,36 @@ def get_recipe(request: RecipeRequest):
     if fallback_recipes:
         return {
             "status": "found",
-            "recipes": fallback_recipes
+            "recipes": [llm_recipe_to_dict(r) for r in fallback_recipes]
         }
 
     return {
         "status": "not_found",
         "recipes": []
+    }
+
+
+def recipe_result_to_dict(recipe):
+    if hasattr(recipe, "metadata"):
+        return doc_to_dict(recipe)
+    return llm_recipe_to_dict(recipe)
+
+
+@app.post("/minute-meals")
+def get_minute_meals(request: MinuteMealsRequest):
+    try:
+        result = retrieve_minute_meals(request.query)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    recipes = [recipe_result_to_dict(recipe) for recipe in result["recipes"]]
+
+    return {
+        "status": "found" if recipes else "not_found",
+        "recipes": recipes,
+        "time_limit": result["time_limit"],
+        "semantic_query": result["semantic_query"],
+        "source": result["source"],
     }
 
 

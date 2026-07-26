@@ -36,7 +36,10 @@ db = Chroma(
 
 STOPWORDS = {
     "recipe", "dish", "make", "give", "me", "a", "an", "the",
-    "with", "using", "for", "and", "or", "ingredients", "cook", "what", "I", "start", "recipes", "dishes"
+    "with", "using", "for", "and", "or", "ingredients", "cook", 
+    "what", "I", "start", "recipes", "dishes", "meal", "food", 
+    "dinner", "lunch", "breakfast", "snack", "dessert", "drink", 
+    "side", "appetizer", "main", "secondary",
 }
 
 def extract_keywords(text):

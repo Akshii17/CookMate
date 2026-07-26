@@ -1,7 +1,10 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
+import toast from "react-hot-toast";
 import { User, Leaf, AlertCircle, Pencil, Check, Camera, X } from "lucide-react";
 import { AvatarArt } from "../components/Arts";
 import { PageShell, PageHero } from "../components/PageShell";
+import { useAuth } from "../context/AuthContext";
+import { getProfile, updateProfile } from "../services/profileService";
 
 const DIET_OPTIONS = [
   { id: "vegetarian", label: "Vegetarian", emoji: "🥦" },
@@ -44,21 +47,59 @@ function ToggleChip({ label, emoji, active, onToggle, variant = "diet" }) {
 }
 
 export default function Profile() {
+  const { updateUser, user } = useAuth();
   const [saved, setSaved] = useState({
-    name: "Aarav Mehta",
-    email: "aarav@cookmate.app",
-    bio: "Home cook. Spice lover. Always hunting for the perfect biryani.",
+    name: "",
+    email: "",
+    bio: "",
     avatar: null,
-    diet: new Set(["vegetarian"]),
-    allergens: new Set(["gluten", "nuts"]),
+    diet: new Set(),
+    allergens: new Set(),
   });
 
   const [draft, setDraft] = useState(null);
   const [saveAnim, setSaveAnim] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
   const avatarInputRef = useRef(null);
 
   const isEditing = draft !== null;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setProfileLoading(true);
+    getProfile()
+      .then((profile) => {
+        if (cancelled) return;
+        setSaved({
+          name: profile.name,
+          email: profile.email,
+          bio: "",
+          avatar: profile.profile_picture,
+          diet: new Set(profile.preferences || []),
+          allergens: new Set(profile.allergens || []),
+        });
+        updateUser({
+          name: profile.name,
+          profile_picture: profile.profile_picture,
+        });
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          toast.error(err.message || "Failed to load profile");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setProfileLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const openEdit = () => {
     setDraft({
@@ -74,19 +115,46 @@ export default function Profile() {
 
   const cancelEdit = () => setDraft(null);
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (!draft) return;
+
     setSaveAnim(true);
     setTimeout(() => setSaveAnim(false), 350);
-    setSaved({
-      ...draft,
-      diet: new Set(draft.diet),
-      allergens: new Set(draft.allergens),
-    });
-    setJustSaved(true);
-    setTimeout(() => {
-      setJustSaved(false);
-      setDraft(null);
-    }, 1400);
+
+    try {
+      const payload = {
+        name: draft.name.trim(),
+        preferences: Array.from(draft.diet),
+        allergens: Array.from(draft.allergens),
+      };
+
+      if (draft.avatar !== saved.avatar) {
+        payload.profile_picture = draft.avatar;
+      }
+
+      const updated = await updateProfile(payload);
+
+      setSaved({
+        name: updated.name,
+        email: updated.email,
+        bio: "",
+        avatar: updated.profile_picture,
+        diet: new Set(updated.preferences || []),
+        allergens: new Set(updated.allergens || []),
+      });
+      updateUser({
+        name: updated.name,
+        profile_picture: updated.profile_picture,
+      });
+      setJustSaved(true);
+      toast.success("Profile updated successfully");
+      setTimeout(() => {
+        setJustSaved(false);
+        setDraft(null);
+      }, 1400);
+    } catch (err) {
+      toast.error(err.message || "Failed to save profile");
+    }
   };
 
   const toggleDiet = (id) =>
@@ -120,6 +188,7 @@ export default function Profile() {
   };
 
   const data = isEditing ? draft : saved;
+  const displayName = saved.name || user?.name || "";
 
   return (
     <PageShell>
@@ -128,7 +197,7 @@ export default function Profile() {
           <>
             Hello,{" "}
             <em className="font-display font-semibold text-cm-olive-muted not-italic">
-              {saved.name.split(" ")[0]}
+              {(displayName.split(" ")[0] || "there")}
             </em>
             !
           </>
@@ -173,7 +242,7 @@ export default function Profile() {
         </div>
 
         <div className="lg:flex-1">
-        <div className="mb-0.5 font-display text-lg font-bold text-cm-text">{saved.name}</div>
+        <div className="mb-0.5 font-display text-lg font-bold text-cm-text">{displayName}</div>
         <div className="mb-4 font-sans text-xs font-light text-[#8a8470]">{saved.email}</div>
 
         <div className="mb-4 flex gap-2 lg:mb-5">
@@ -192,7 +261,7 @@ export default function Profile() {
           ))}
         </div>
 
-        {!isEditing && (
+        {!isEditing && !profileLoading && (
           <div className="mt-4 lg:mt-0">
             <button
               type="button"
@@ -231,13 +300,9 @@ export default function Profile() {
               <label className="mb-1.5 block font-sans text-[11.5px] font-medium tracking-wide text-[#6a6454]">
                 Email
               </label>
-              <input
-                className="w-full rounded-xl border-[1.5px] border-[#c8c2a8] bg-[#e4e0ce] px-3.5 py-2.5 font-sans text-[13.5px] text-[#2c2818] outline-none transition-[border-color,background] placeholder:font-light placeholder:text-[#9a9078] focus:border-[#8a9c68] focus:bg-[#dedad0]"
-                type="email"
-                value={draft.email}
-                onChange={(e) => setDraft((d) => ({ ...d, email: e.target.value }))}
-                placeholder="your@email.com"
-              />
+              <div className="w-full rounded-xl border-[1.5px] border-[#c8c2a8] bg-[#e4e0ce] px-3.5 py-2.5 font-sans text-[13.5px] text-[#58523e]">
+                {draft.email}
+              </div>
             </div>
             <div>
               <label className="mb-1.5 block font-sans text-[11.5px] font-medium tracking-wide text-[#6a6454]">
@@ -417,7 +482,7 @@ export default function Profile() {
           </button>
 
           <p className="mt-1 text-center font-sans text-[11.5px] font-light leading-snug text-[#9a9078]">
-            Your preferences are stored locally and used only to personalise your recipes.
+            Your preferences are saved to your account and used to personalise your recipes.
           </p>
         </div>
       )}
