@@ -14,11 +14,12 @@ def get_my_favorites(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    #stores the entire selected row
     favorites = (
         db.query(Favorite)
         .filter(Favorite.user_id == current_user.id)
         .order_by(Favorite.created_at.desc())
-        .all()
+        .all() # executes the query and returns a list
     )
 
     recipe_ids = [favorite.recipe_id for favorite in favorites]

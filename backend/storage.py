@@ -10,7 +10,7 @@ DATA_URL_PATTERN = re.compile(
     re.DOTALL,
 )
 
-
+# returns the Supabase project URL
 def get_supabase_url() -> str | None:
     configured = os.getenv("SUPABASE_URL")
     if configured:
@@ -23,11 +23,11 @@ def get_supabase_url() -> str | None:
 
     return None
 
-
+# returns the bucket name, default is avatars
 def get_avatar_bucket() -> str:
     return os.getenv("SUPABASE_AVATAR_BUCKET", "avatars")
 
-
+#Builds the HTTP headers needed to authenticate an upload to Supabase Storage, handling old vs. new key formats.
 def _storage_headers(service_key: str, content_type: str) -> dict[str, str]:
     headers = {
         "Content-Type": content_type,
@@ -44,7 +44,7 @@ def _storage_headers(service_key: str, content_type: str) -> dict[str, str]:
 
     return headers
 
-
+# Converts a stored avatar path into a full public Supabase Storage URL, or returns an existing URL unchanged
 def resolve_profile_picture_url(stored_value: str | None) -> str | None:
     if not stored_value:
         return None
@@ -64,7 +64,7 @@ def resolve_profile_picture_url(stored_value: str | None) -> str | None:
     object_path = trimmed.lstrip("/")
     return f"{supabase_url}/storage/v1/object/public/{bucket}/{object_path}"
 
-
+# Decodes a base64 data URL, uploads the image to the user's Supabase Storage folder with a unique filename, and returns the stored object path
 def upload_avatar_to_supabase(user_id: int, data_url: str) -> str | None:
     supabase_url = get_supabase_url()
     service_key = os.getenv("SUPABASE_SERVICE_KEY")
