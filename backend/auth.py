@@ -30,7 +30,7 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto") #creates a pswd hasher
 
 def hash_password(password: str):
     return pwd_context.hash(password)
@@ -38,6 +38,7 @@ def hash_password(password: str):
 def verify_password(plain_password: str, hashed_password: str):
     return pwd_context.verify(plain_password, hashed_password)
 
+# creates a session
 def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
@@ -72,6 +73,7 @@ def user_to_response(user: User) -> dict:
         "profile_picture": resolve_profile_picture_url(user.profile_picture),
     }
 
+# decode the jwt to get user email
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -93,8 +95,9 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     except JWTError:
         raise credentials_exception
 
+    #searches db for that email
     user = (
-        db.query(User)
+        db.query(User) 
         .filter(User.email == email)
         .first()
     )
@@ -145,8 +148,8 @@ def signup(user: UserSignup, db: Session = Depends(get_db)):
     )
 
     # Save to database
-    db.add(new_user)
-    db.commit()
+    db.add(new_user) #Adds object to session.
+    db.commit() #saves to db
     db.refresh(new_user)
 
     # Return the created user

@@ -633,7 +633,7 @@ export default function Recipe() {
         if (data.status === "success" && data.recipe) {
           setSelectedRecipe(data.recipe);
           setModText("");
-        } else {
+        } else {    
           throw new Error("Failed to modify recipe.");
         }
       })

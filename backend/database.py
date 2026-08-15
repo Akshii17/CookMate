@@ -12,7 +12,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 # Create database engine
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True, # ping the database to keep the connection alive, otherwise we get server error
+    pool_pre_ping=True, # Check whether a pooled connection is still alive before using it, If it's dead, SQLAlchemy automatically opens a new one.
 )
 
 # Create session factory

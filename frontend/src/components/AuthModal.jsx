@@ -265,7 +265,7 @@ export function AuthModal({ mode, onClose, onSwitchMode, onSuccess }) {
                 setLoading(true);
 
                 await googleLogin(
-                  credentialResponse.credential
+                  credentialResponse.credential //contains google id token
                 );
 
                 toast.success("Logged in successfully!");

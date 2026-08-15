@@ -11,7 +11,7 @@ from rag.retrieval_pipeline import (
 )
 from rag.minute_meals_pipeline import retrieve_minute_meals
 
-from backend.auth import router as auth_router
+from backend.auth import router as auth_router 
 from backend.users import router as users_router
 from backend.favorites import router as favorites_router
 
@@ -30,7 +30,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth_router)
+app.include_router(auth_router) 
 app.include_router(users_router)
 app.include_router(favorites_router)
 
@@ -38,16 +38,15 @@ app.include_router(favorites_router)
 def health_check():
     return {"status": "backend is running"}
 
-
-class RecipeRequest(BaseModel):
-    query: str
+# this enforces that query will be string only, max_prep_time = int / none...default = none.
+class RecipeRequest(BaseModel): 
+    query: str 
     max_prep_time: int | None = None
 
-
+# here is class is used to define request structure
 class ModifyRecipeRequest(BaseModel):
     recipe: dict
     request: str
-
 
 class AskQuestionRequest(BaseModel):
     recipe: dict
@@ -63,13 +62,14 @@ class MinuteMealsRequest(BaseModel):
 
 def doc_to_dict(doc):
     """Convert a LangChain Document into a plain JSON-friendly dict"""
+    meta = doc.metadata
     return {
-        "id": doc.metadata.get("id"),
-        "title": doc.metadata.get("title"),
-        "prep_time": doc.metadata.get("prep_time"),
-        "diet": doc.metadata.get("diet"),
-        "cuisine": doc.metadata.get("cuisine"),
-        "ingredients": doc.metadata.get("ingredients"),
+        "id": meta.get("id"),
+        "title": meta.get("title"),
+        "prep_time": meta.get("prep_time"),
+        "diet": meta.get("diet"),
+        "cuisine": meta.get("cuisine"),
+        "ingredients": meta.get("ingredients"),
         "content": doc.page_content,
         "source": "rag",
     }
@@ -82,6 +82,10 @@ def llm_recipe_to_dict(recipe: dict) -> dict:
         "source": "llm",
     }
 
+def recipe_result_to_dict(recipe):
+    if hasattr(recipe, "metadata"):
+        return doc_to_dict(recipe)
+    return llm_recipe_to_dict(recipe)
 
 @app.post("/get-recipe")
 def get_recipe(request: RecipeRequest):
@@ -90,7 +94,7 @@ def get_recipe(request: RecipeRequest):
     if filtered_docs:
         return {
             "status": "found",
-            "recipes": [doc_to_dict(d) for d in filtered_docs[:5]]
+            "recipes": [doc_to_dict(d) for d in filtered_docs[:5]] #list commprehension
         }
 
     fallback_recipes = generate_fallback_recipes(request.query, max_prep_time=request.max_prep_time)
@@ -105,30 +109,22 @@ def get_recipe(request: RecipeRequest):
         "recipes": []
     }
 
-
-def recipe_result_to_dict(recipe):
-    if hasattr(recipe, "metadata"):
-        return doc_to_dict(recipe)
-    return llm_recipe_to_dict(recipe)
-
-
 @app.post("/minute-meals")
 def get_minute_meals(request: MinuteMealsRequest):
     try:
         result = retrieve_minute_meals(request.query)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc #actually never send raw error to user, using detail = str(exc)
 
     recipes = [recipe_result_to_dict(recipe) for recipe in result["recipes"]]
 
     return {
         "status": "found" if recipes else "not_found",
         "recipes": recipes,
-        "time_limit": result["time_limit"],
+        "time_limit": result["time_limit"], #result.get("time_limit") is safer since if empty, wont throw error
         "semantic_query": result["semantic_query"],
         "source": result["source"],
     }
-
 
 @app.post("/modify-recipe")
 def modify_recipe(req: ModifyRecipeRequest):
@@ -137,7 +133,6 @@ def modify_recipe(req: ModifyRecipeRequest):
         return {"status": "success", "recipe": modified}
     else:
         return {"status": "error", "recipe": None}
-
 
 @app.post("/ask-question")
 def ask_question(req: AskQuestionRequest):

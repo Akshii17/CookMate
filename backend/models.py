@@ -39,7 +39,7 @@ class Favorite(Base):
     __tablename__ = "favorites"
     __table_args__ = (
         UniqueConstraint("user_id", "recipe_id", name="uq_user_recipe_favorite"),
-    )
+    ) #make combination of user id and rec id unique since one user cant like same recipe twice
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
