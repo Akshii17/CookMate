@@ -494,7 +494,7 @@ export default function Recipe() {
     if (openedFromSaved) {
       navigate(location.pathname, { replace: true, state: null });
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     setModText("");

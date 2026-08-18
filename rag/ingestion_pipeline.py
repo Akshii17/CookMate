@@ -4,6 +4,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 
 import os
+#stores the directory of current file
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -67,7 +68,7 @@ def create_vector_store(documents, persist_directory=None):
     """Create and persist ChromaDB vector store"""
 
     if persist_directory is None:
-        persist_directory = os.path.join(BASE_DIR, "db", "chroma_db")
+        persist_directory = os.path.join(BASE_DIR, "db", "chroma_db") #stores the path where to create db
 
     print("Creating embeddings and storing in ChromaDB...")
 

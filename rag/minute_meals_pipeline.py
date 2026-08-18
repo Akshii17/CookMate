@@ -1,16 +1,15 @@
 import re
-
 from rag.retrieval_pipeline import db, generate_fallback_recipes
 
 DEFAULT_SEARCH_K = 30
 MAX_RESULTS = 5
 
 MINUTE_MEALS_QUERY_PATTERN = re.compile(
-    r"^\s*(\d+)\s+minute\s+(.+)$",
+    r"^\s*(\d+)\s+minute\s+(.+)$", #() captures groups
     re.IGNORECASE,
 )
 
-
+# extracts the time limit and required dish
 def extract_time_query(user_query: str) -> tuple[int, str]:
     """
     Parse queries like "30 minute pasta" into (time_limit, semantic_query).
@@ -31,7 +30,6 @@ def extract_time_query(user_query: str) -> tuple[int, str]:
 
     return time_limit, semantic_query
 
-
 def _similarity_search_semantic(semantic_query: str, k: int = DEFAULT_SEARCH_K):
     """
     Run vector similarity search using only the semantic portion of the query.
@@ -39,7 +37,6 @@ def _similarity_search_semantic(semantic_query: str, k: int = DEFAULT_SEARCH_K):
     """
     query = f"search_query: {semantic_query}"
     return db.similarity_search(query, k=k)
-
 
 def filter_by_prep_time(docs, time_limit: int):
     """Keep only recipes whose metadata prep_time is <= time_limit."""
@@ -56,7 +53,6 @@ def filter_by_prep_time(docs, time_limit: int):
             continue
 
     return filtered
-
 
 def retrieve_minute_meals(
     user_query: str,
@@ -110,3 +106,7 @@ def retrieve_minute_meals(
         "recipes": [],
         "source": "none",
     }
+
+if __name__ == "__main__":
+    query = "60 minute pasta"
+    print(retrieve_minute_meals(query))

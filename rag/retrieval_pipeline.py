@@ -12,13 +12,11 @@ load_dotenv()
 from openai import OpenAI
 client = OpenAI()
 
-
-
 import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 persist_directory = os.path.join(BASE_DIR, "db", "chroma_db")
 
-# ✅ SAME MODEL AS INGESTION
+# SAME MODEL AS INGESTION
 embedding_model = HuggingFaceEmbeddings(
     model_name="BAAI/bge-small-en-v1.5"
 )
@@ -29,20 +27,18 @@ db = Chroma(
     embedding_function=embedding_model
 )
 
-
-# -----------------------------
-# 🧠 HELPERS
-# -----------------------------
+#  HELPERS
 
 STOPWORDS = {
     "recipe", "dish", "make", "give", "me", "a", "an", "the",
     "with", "using", "for", "and", "or", "ingredients", "cook", 
     "what", "I", "start", "recipes", "dishes", "meal", "food", 
     "dinner", "lunch", "breakfast", "snack", "dessert", "drink", 
-    "side", "appetizer", "main", "secondary",
+    "side", "appetizer", "main", "secondary", "how", "to", "want"
 }
 
 def extract_keywords(text):
+    #remove punctuation and special symbols from a string (^ = not, \w alphanumeric char, \s whitespace, - hyphen...replace them by ' ')
     cleaned_text = re.sub(r'[^\w\s\-]', ' ', text.lower())
     return [
         word for word in cleaned_text.split()
@@ -93,7 +89,7 @@ def generate_recipe_llm(prompt):
     )
     return response.output_text
 
-
+#for getting 5 options from llm if not found from rag
 def generate_fallback_recipes(query: str, max_prep_time: int | None = None) -> list[dict]:
     prompt = (
         f"Generate up to 5 distinct, realistic recipes matching the query: \"{query}\".\n"
@@ -181,10 +177,7 @@ def generate_fallback_recipes(query: str, max_prep_time: int | None = None) -> l
         return []
 
 
-# -----------------------------
-# 🧠 SHOW OPTIONS
-# -----------------------------
-
+#  SHOW OPTIONS
 def show_options_and_select(docs):
     print("\n--- Choose a recipe ---\n")
 
@@ -223,9 +216,7 @@ def show_options_and_select2(text):
             pass
         print("Invalid choice")
 
-# -----------------------------
-# 🧠 RECIPE RETRIEVAL FUNCTION
-# -----------------------------
+# RECIPE RETRIEVAL FUNCTION
 def run_rag(user_query, max_prep_time: int | None = None):
 
     raw_query = user_query
@@ -241,7 +232,7 @@ def run_rag(user_query, max_prep_time: int | None = None):
 
     docs = retriever.invoke(query)
 
-    # 🚨 No docs
+    # No docs
     if not docs:
         #direct call to LLM done in app.py
         return [], []
@@ -251,18 +242,15 @@ def run_rag(user_query, max_prep_time: int | None = None):
 
     
 
-    # -----------------------------
-    # 🧠 FILTER DOCS
-    # -----------------------------
-
+    #  FILTER DOCS
     filtered_docs = []
 
-    # 🥇 Title match
+    # Title match
     for doc in docs:
         if is_title_match(doc.metadata.get("title", ""), raw_query):
             filtered_docs.append(doc)
 
-    # 🥕 Ingredient match
+    # Ingredient match
     if len(filtered_docs) < 5:
         ranked_docs = sorted(
             docs,
@@ -438,52 +426,3 @@ def answer_step_question_llm(
         return text.strip()
     except Exception:
         return None
-
-
-def answer_step_question_llm(
-    recipe: dict,
-    current_step_text: str,
-    step_number: int,
-    total_steps: int,
-    question: str,
-) -> str | None:
-    title = recipe.get("title", "")
-    ingredients = recipe.get("ingredients", [])
-    steps = recipe.get("steps", [])
-
-    if not steps and recipe.get("content"):
-        content = recipe["content"]
-        if "Instructions:" in content:
-            raw = content.split("Instructions:")[1]
-            steps = [
-                re.sub(r"^\d+\.\s*", "", s.strip())
-                for s in raw.split("\n")
-                if s.strip()
-            ]
-
-    ingredients_str = "\n".join(f"- {ing}" for ing in ingredients)
-    steps_str = "\n".join(f"{i}. {step}" for i, step in enumerate(steps, 1))
-
-    prompt = (
-        f"You are helping a user cook: {title}\n\n"
-        f"Ingredients:\n{ingredients_str}\n\n"
-        f"All steps:\n{steps_str}\n\n"
-        f"The user is currently on step {step_number} of {total_steps}:\n"
-        f"\"{current_step_text}\"\n\n"
-        f"Question: {question}\n\n"
-        "Answer in 2-4 concise sentences. Plain text only, no preamble, no JSON."
-    )
-
-    try:
-        response = client.responses.create(
-            model="gpt-4o-mini",
-            input=prompt,
-            max_output_tokens=300,
-        )
-        text = response.output_text
-        if not text or not text.strip():
-            return None
-        return text.strip()
-    except Exception:
-        return None
-
