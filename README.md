@@ -87,7 +87,7 @@ CookMate's UI is built around a warm, editorial "cookbook" aesthetic — soft ol
 
 ## 5. Project Architecture
 
-CookMate follows a three-tier architecture: a React client, a FastAPI backend for stateful data (users, favorites), and a separate RAG module for all recipe intelligence, which the backend calls into directly.
+CookMate follows a three-tier architecture consisting of a React frontend (presentation layer), a FastAPI backend and RAG/LLM services (application layer), and PostgreSQL, ChromaDB, and Supabase Storage (data layer). The backend acts as the central application layer, handling authentication, user data, recipe retrieval, and AI-powered recipe operations.
 
 ```
 ┌─────────────────────┐        HTTPS/JSON          ┌──────────────────────────┐
